@@ -1,0 +1,139 @@
+{{ define "main" }}
+{{ $key := .Params.key }}
+{{ $lib := index (where site.Data.libraries "key" $key) 0 }}
+<div id="libraryPage">
+  <header style="border-bottom: 4px solid {{ $lib.color }}">
+    <a class="back-btn" href="/">&#8592; All Libraries</a>
+    <h1 id="libraryName">The SF Lending Library: {{ $lib.name }}</h1>
+  </header>
+  <div class="date-bar">
+    <div class="date-bar-inner">
+      <div class="date-field"><label>Pickup date</label><input type="date" id="pickupDate" onchange="onDatesChange()"></div>
+      <div class="date-sep">&#8594;</div>
+      <div class="date-field"><label>Return date</label><input type="date" id="returnDate" onchange="onDatesChange()"></div>
+      <button class="clear-btn" onclick="clearDates()">Clear dates</button>
+      <div id="dateError" class="date-error" style="display:none"></div>
+      <div id="filterSummary" class="filter-summary" style="display:none"></div>
+      <div id="blackoutNote" class="blackout-note" style="display:none"></div>
+    </div>
+  </div>
+  <div class="filter-bar" id="filterBar" style="display:none">
+    <div class="filter-bar-inner">
+      <div class="cat-chips" id="catChips"></div>
+      <div class="filter-controls">
+        <div class="search-wrap">
+          <input type="text" id="searchInput" class="search-input" placeholder="Search by name or brand..." oninput="applyFilters(); updateSearchClear()">
+          <button class="search-clear" id="searchClear" onclick="clearSearch()" aria-label="Clear search">&#10005;</button>
+        </div>
+        <label class="toggle-label">
+          <input type="checkbox" id="availToggle" onchange="applyFilters()">
+          <span class="toggle-slider"></span>
+          Available only
+        </label>
+      </div>
+    </div>
+  </div>
+  <div class="container">
+    <div id="loading" class="loading">Loading what's available...</div>
+    <div id="content" style="display:none"><p class="hint">Tap available items to add them to your request</p></div>
+  </div>
+  <div class="cart-bar" id="cartBar">
+    <div>
+      <span class="cart-text"><strong id="cartCount">0</strong> <span id="cartCountLabel">item</span> selected</span>
+      <div class="cart-items-list" id="cartItemsList"></div>
+    </div>
+    <div style="display:flex; align-items:center; gap:0.5rem;">
+      <button class="cart-clear-btn" onclick="clearCart()">Clear all</button>
+      <button class="cart-btn" id="cartBtn" onclick="openModal()">Request this item &#8594;</button>
+    </div>
+  </div>
+
+  <!-- Removal alert -->
+  <div class="removal-overlay" id="removalOverlay">
+    <div class="removal-alert">
+      <div class="removal-alert-header">
+        <strong id="removalAlertTitle">Item removed from your selection</strong>
+        <button class="removal-alert-close" onclick="closeRemovalAlert()">&#10005;</button>
+      </div>
+      <div class="removal-alert-body" id="removalAlertBody"></div>
+    </div>
+  </div>
+
+  <!-- Request modal -->
+  <div class="modal-overlay" id="modalOverlay" onclick="closeModalIfBackground(event)">
+    <div class="modal" id="modal">
+      <div id="viewForm">
+        <div class="modal-header">
+          <h2>Request to borrow</h2>
+          <button class="modal-close" onclick="closeModal()">&#10005;</button>
+        </div>
+        <p style="font-size:0.8rem;color:#9E8C7E;text-align:center;padding:0.6rem 1.5rem 0;font-weight:600;">All fields are required.</p>
+        <div class="modal-body">
+          <div>
+            <div class="modal-section-label">Items</div>
+            <div class="modal-items-list" id="modalItemsList"></div>
+          </div>
+          <div>
+            <div class="modal-section-label">Dates</div>
+            <div class="modal-dates-display">
+              <span class="modal-dates-text" id="modalDatesText">&#8212;</span>
+              <button class="change-dates-btn" onclick="closeModal(); window.scrollTo(0,0)">&#8592; Change dates</button>
+            </div>
+            <input type="hidden" id="modalPickupDate">
+            <input type="hidden" id="modalReturnDate">
+          </div>
+          <div class="modal-row">
+            <div class="modal-field">
+              <label>Pickup time</label>
+              <select id="modalPickupTime">
+                <option value="">Select window</option>
+                <option>8 - 9am</option><option>9 - 10am</option><option>10 - 11am</option>
+                <option>11am - 12pm</option><option>12 - 1pm</option><option>1 - 2pm</option>
+                <option>2 - 3pm</option><option>3 - 4pm</option><option>4 - 5pm</option>
+                <option>5 - 6pm</option><option>6 - 7pm</option><option>7 - 8pm</option>
+              </select>
+            </div>
+            <div class="modal-field">
+              <label>Return time</label>
+              <select id="modalReturnTime">
+                <option value="">Select window</option>
+                <option>8 - 9am</option><option>9 - 10am</option><option>10 - 11am</option>
+                <option>11am - 12pm</option><option>12 - 1pm</option><option>1 - 2pm</option>
+                <option>2 - 3pm</option><option>3 - 4pm</option><option>4 - 5pm</option>
+                <option>5 - 6pm</option><option>6 - 7pm</option><option>7 - 8pm</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-field"><label>Your name</label><input type="text" id="modalName" placeholder="First Last"></div>
+          <div class="modal-field"><label>Email</label><input type="email" id="modalEmail" placeholder="you@example.com"></div>
+          <div class="modal-field"><label>Phone</label><input type="tel" id="modalPhone" placeholder="(555) 123-4567"></div>
+          <div class="disclaimer-box"><strong>The fine print &#8212;</strong> these items are offered in the spirit of community sharing and have been used and loved before you. Because they are secondhand, I'm not able to personally verify their full history or certify their safety. By borrowing, you agree to inspect before use, confirm they meet current safety standards, and take full responsibility for their use.</div>
+          <div class="modal-row">
+            <div class="modal-field"><label>Your name (to confirm)</label><input type="text" id="modalSignature" placeholder="Type your full name"></div>
+            <div class="modal-field"><label>Today's date</label><input type="date" id="modalAgreementDate"></div>
+          </div>
+          <div id="modalError" class="modal-error" style="display:none"></div>
+          <button class="modal-submit-btn" id="submitBtn" onclick="submitForm()">Send request &#8594;</button>
+        </div>
+      </div>
+      <div id="viewLoading" style="display:none">
+        <div class="modal-status"><div class="status-icon">&#8987;</div><h3>Sending your request...</h3></div>
+      </div>
+      <div id="viewSuccess" style="display:none">
+        <div class="modal-status">
+          <div class="status-icon">&#127881;</div>
+          <h3>Request sent!</h3>
+          <p>We'll be in touch soon to confirm your reservation.</p>
+          <button class="modal-done-btn" onclick="closeModal()">Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{{ end }}
+
+{{ define "scripts" }}
+{{ with resources.Get "js/library.js" | minify | fingerprint }}
+<script src="{{ .RelPermalink }}"></script>
+{{ end }}
+{{ end }}

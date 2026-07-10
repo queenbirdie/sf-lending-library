@@ -1,0 +1,22 @@
+<div class="modal-overlay" id="contactOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Send a message</h2>
+      <button class="modal-close" onclick="closeContactModal()">&#10005;</button>
+    </div>
+    <div class="modal-body" id="contactForm">
+      <div class="contact-field"><label>Name <span style="color:#E07A5F">*</span></label><input type="text" id="contactName" placeholder="Jane Smith"></div>
+      <div class="contact-field"><label>Email <span style="color:#E07A5F">*</span></label><input type="email" id="contactEmail" placeholder="jane@example.com"></div>
+      <div class="contact-field"><label>Phone / WhatsApp <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#B0A097">(optional)</span></label><input type="tel" id="contactPhone" placeholder="415-555-1234"></div>
+      <div class="contact-field"><label>Message <span style="color:#E07A5F">*</span></label><textarea id="contactMessage" placeholder="What's on your mind?"></textarea></div>
+      <div id="contactError" class="modal-error" style="display:none"></div>
+      <button class="modal-submit-btn" onclick="submitContact()">Send message</button>
+    </div>
+    <div class="modal-status" id="contactSuccess" style="display:none">
+      <div class="status-icon">&#9993;&#65039;</div>
+      <h3>Message sent!</h3>
+      <p>I'll get back to you as soon as I can.</p>
+      <button class="modal-done-btn" onclick="closeContactModal()">Done</button>
+    </div>
+  </div>
+</div>

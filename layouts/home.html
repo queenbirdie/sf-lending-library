@@ -1,0 +1,33 @@
+{{ define "main" }}
+<div class="home-header">
+  <h1>{{ site.Title }}</h1>
+  <p>{{ site.Params.tagline }}</p>
+</div>
+<div class="home-container">
+  <div class="lib-grid">
+    {{ range site.Data.libraries }}
+    <a class="lib-card lib-card-{{ .key }}" href="/{{ .key }}/">
+      <div class="lib-card-emoji">{{ .emoji }}</div>
+      <div class="lib-card-name">{{ .name }}</div>
+      <div class="lib-card-desc">{{ .desc }}</div>
+      <div class="lib-card-cta">Browse &#8594;</div>
+    </a>
+    {{ end }}
+  </div>
+
+  <div class="faq-section">
+    <div class="faq-heading">FAQs</div>
+    <div id="faqContent"></div>
+    <div class="faq-contact">
+      <p>Questions, suggestions, or ideas for new items? Get in touch!</p>
+      <button class="faq-contact-btn" onclick="openContactModal()">Send me a message &#8594;</button>
+    </div>
+  </div>
+</div>
+{{ end }}
+
+{{ define "scripts" }}
+{{ with resources.Get "js/home.js" | minify | fingerprint }}
+<script src="{{ .RelPermalink }}"></script>
+{{ end }}
+{{ end }}

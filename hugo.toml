@@ -1,0 +1,14 @@
+baseURL = "https://sflendinglibrary.org/"
+languageCode = "en-us"
+title = "The SF Lending Library"
+disableKinds = ["taxonomy", "term", "rss"]
+
+[params]
+  tagline = "share more · buy less"
+  # Apps Script web app URL — the deployed /exec URL of the
+  # "SF Lending Library — Unified" script (Deploy → Manage deployments).
+  # Must be deployed as: Execute as "Me", Who has access: "Anyone".
+  apiUrl = "https://script.google.com/macros/s/AKfycbzZiHxUjU5RglmnzaRYZfrpQqFhq-7sW4JPZCjQ1hx6GZt5CYvHiEwcDVm26_PmMF9jiQ/exec"
+
+[markup.goldmark.renderer]
+  unsafe = true

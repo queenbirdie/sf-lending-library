@@ -12,7 +12,7 @@
   {{ with resources.Get "css/main.css" | minify | fingerprint }}
   <link rel="stylesheet" href="{{ .RelPermalink }}">
   {{ end }}
-  <script>window.SFLL = { apiUrl: {{ site.Params.apiUrl }} };</script>
+  <script>window.SFLL = { apiUrl: {{ site.Params.apiUrl }}, home: {{ site.Home.RelPermalink }} };</script>
 </head>
 <body{{ with .Params.key }} data-lib-key="{{ . }}"{{ end }}>
 {{ block "main" . }}{{ end }}

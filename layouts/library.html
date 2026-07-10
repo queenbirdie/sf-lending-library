@@ -3,7 +3,7 @@
 {{ $lib := index (where site.Data.libraries "key" $key) 0 }}
 <div id="libraryPage">
   <header style="border-bottom: 4px solid {{ $lib.color }}">
-    <a class="back-btn" href="/">&#8592; All Libraries</a>
+    <a class="back-btn" href="{{ site.Home.RelPermalink }}">&#8592; All Libraries</a>
     <h1 id="libraryName">The SF Lending Library: {{ $lib.name }}</h1>
   </header>
   <div class="date-bar">

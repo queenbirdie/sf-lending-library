@@ -6,7 +6,7 @@
 <div class="home-container">
   <div class="lib-grid">
     {{ range site.Data.libraries }}
-    <a class="lib-card lib-card-{{ .key }}" href="/{{ .key }}/">
+    <a class="lib-card lib-card-{{ .key }}" href="{{ relURL .key }}/">
       <div class="lib-card-emoji">{{ .emoji }}</div>
       <div class="lib-card-name">{{ .name }}</div>
       <div class="lib-card-desc">{{ .desc }}</div>

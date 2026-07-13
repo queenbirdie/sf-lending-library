@@ -1,0 +1,14 @@
+{
+  "name": "The SF Lending Library",
+  "short_name": "Lending Library",
+  "description": "Borrow kid & travel gear, party supplies, kids' costumes, and puzzles & games for free in San Francisco.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FAF7F2",
+  "theme_color": "#E07A5F",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

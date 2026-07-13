@@ -1,0 +1,52 @@
+{{ define "main" }}
+<div id="adminPage">
+  <header style="border-bottom: 4px solid #3D3530">
+    <a class="back-btn" href="{{ site.Home.RelPermalink }}">&#8592; Site</a>
+    <h1>Admin Dashboard</h1>
+  </header>
+
+  <div id="lockScreen" class="admin-container">
+    <div class="admin-lock-card">
+      <p class="admin-lock-label">Enter passcode</p>
+      <input type="password" id="passcodeInput" class="admin-passcode-input" autocomplete="off" onkeydown="if(event.key==='Enter')unlockAdmin()">
+      <div id="lockError" class="modal-error" style="display:none"></div>
+      <button class="modal-submit-btn" onclick="unlockAdmin()">Unlock</button>
+    </div>
+  </div>
+
+  <div id="dashboard" class="admin-container" style="display:none">
+    <div class="admin-toolbar">
+      <button class="clear-btn" onclick="loadAdminData()">&#8635; Refresh</button>
+    </div>
+    <div id="adminLoading" class="loading">Loading...</div>
+    <div id="adminContent" style="display:none">
+      <section class="admin-section">
+        <h2 class="admin-section-title">New requests <span id="pendingCount" class="admin-count-badge"></span></h2>
+        <div id="pendingList" class="admin-list"></div>
+      </section>
+      <section class="admin-section">
+        <h2 class="admin-section-title">Tomorrow's pickups <span id="pickupsCount" class="admin-count-badge"></span></h2>
+        <div id="pickupsList" class="admin-list"></div>
+      </section>
+      <section class="admin-section">
+        <h2 class="admin-section-title">Tomorrow's returns <span id="returnsCount" class="admin-count-badge"></span></h2>
+        <div id="returnsList" class="admin-list"></div>
+      </section>
+      <section class="admin-section">
+        <h2 class="admin-section-title">Overdue returns <span id="overdueCount" class="admin-count-badge"></span></h2>
+        <div id="overdueList" class="admin-list"></div>
+      </section>
+      <section class="admin-section">
+        <h2 class="admin-section-title">Double-booking conflicts <span id="conflictsCount" class="admin-count-badge"></span></h2>
+        <div id="conflictsList" class="admin-list"></div>
+      </section>
+    </div>
+  </div>
+</div>
+{{ end }}
+
+{{ define "scripts" }}
+{{ with resources.Get "js/admin.js" | minify | fingerprint }}
+<script src="{{ .RelPermalink }}"></script>
+{{ end }}
+{{ end }}

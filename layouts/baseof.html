@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ if .IsHome }}{{ site.Title }}{{ else }}{{ .Title }} · {{ site.Title }}{{ end }}</title>
   <meta name="description" content="A neighborhood lending library in San Francisco — borrow kid & travel gear, party supplies, kids' costumes, and puzzles & games for free.">
+  {{ if .Params.noindex }}<meta name="robots" content="noindex, nofollow">{{ end }}
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png">
   <link rel="apple-touch-icon" href="/icons/icon-180.png">
   <link rel="manifest" href="/manifest.webmanifest">

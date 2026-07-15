@@ -110,6 +110,15 @@ function getItemSize(itemName, libraryKey, invRows) {
   return '';
 }
 
+function getItemImageUrl(itemName, libraryKey, invRows) {
+  for (var i = 1; i < invRows.length; i++) {
+    if (String(invRows[i][COL_ITEM]).trim() === itemName && String(invRows[i][COL_LIBRARY]).trim() === libraryKey) {
+      return normalizeDriveUrl(String(invRows[i][COL_IMAGE_URL] || '').trim());
+    }
+  }
+  return '';
+}
+
 function submitReservation(formData) {
   try {
     var libraryKey    = String(formData.libraryKey || '').trim();
@@ -959,6 +968,8 @@ function doPost(e) {
       result = getAdminData(body.passcode);
     } else if (action === 'adminUpdateStatus') {
       result = adminUpdateStatus(body);
+    } else if (action === 'adminBatchUpdateStatus') {
+      result = adminBatchUpdateStatus(body);
     } else if (action === 'adminReviseReservation') {
       result = adminReviseReservation(body);
     } else {

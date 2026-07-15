@@ -23,6 +23,8 @@ to preserve anything — just pick a new passcode.
       result = getAdminData(body.passcode);
     } else if (action === 'adminUpdateStatus') {
       result = adminUpdateStatus(body);
+    } else if (action === 'adminBatchUpdateStatus') {
+      result = adminBatchUpdateStatus(body);
     } else if (action === 'adminReviseReservation') {
       result = adminReviseReservation(body);
 ```
@@ -67,7 +69,7 @@ function getAdminData(passcode) {
     return dt.getTime() === ref.getTime();
   }
 
-  var pending = [], tomorrowPickups = [], tomorrowReturns = [], overdue = [], upcoming = [], checkedOut = [];
+  var pending = [], tomorrowPickups = [], tomorrowReturns = [], todayReturns = [], overdue = [], upcoming = [], checkedOut = [];
 
   for (var i = 1; i < rows.length; i++) {
     var r = rows[i];
@@ -77,6 +79,7 @@ function getAdminData(passcode) {
       row: rowNum,
       status: status,
       library: String(r[0]).trim(),
+      groupKey: r[1] ? String((r[1] instanceof Date ? r[1] : new Date(r[1])).getTime()) : ('row-' + rowNum),
       name: String(r[2]).trim(),
       email: String(r[3]).trim(),
       phone: String(r[4]).trim(),
@@ -84,6 +87,8 @@ function getAdminData(passcode) {
       brand: String(r[6] || '').trim(),
       size: String(r[9] || '').trim(),
       qty: (r[8] && !isNaN(parseInt(r[8]))) ? parseInt(r[8]) : 1,
+      availabilityStatus: String(r[14] || '').trim(),
+      imageUrl: getItemImageUrl(String(r[7]).trim(), String(r[0]).trim(), invRows),
       pickupDate: fmt(r[10]), pickupDateISO: fmtISO(r[10]), pickupTime: String(r[11] || '').trim(),
       returnDate: fmt(r[12]), returnDateISO: fmtISO(r[12]), returnTime: String(r[13] || '').trim()
     };
@@ -95,6 +100,9 @@ function getAdminData(passcode) {
     }
     if ((status === 'Lent Out' || status === 'Added to existing request') && r[12] && isSameDay(r[12], tomorrow)) {
       tomorrowReturns.push(entry);
+    }
+    if ((status === 'Lent Out' || status === 'Added to existing request') && r[12] && isSameDay(r[12], today)) {
+      todayReturns.push(entry);
     }
     if ((status === 'Lent Out' || status === 'Added to existing request') && r[12]) {
       var rd = r[12] instanceof Date ? new Date(r[12]) : new Date(r[12]);
@@ -168,9 +176,23 @@ function getAdminData(passcode) {
   });
 
   return {
-    pending: pending, tomorrowPickups: tomorrowPickups, tomorrowReturns: tomorrowReturns,
+    pending: pending, tomorrowPickups: tomorrowPickups, tomorrowReturns: tomorrowReturns, todayReturns: todayReturns,
     overdue: overdue, upcoming: upcoming, checkedOut: checkedOut, conflicts: conflicts
   };
+}
+
+function applyReservationStatus(sheet, row, newStatus, today) {
+  sheet.getRange(row, RSVP_STATUS_COL).setValue(newStatus);
+  if (newStatus === 'Returned') {
+    var returnDateCell = sheet.getRange(row, 13).getValue(); // M: Return Date
+    sheet.getRange(row, 18).setValue(today); // R: Actual Return Date
+    if (returnDateCell) {
+      var rd = returnDateCell instanceof Date ? new Date(returnDateCell) : new Date(returnDateCell);
+      rd.setHours(0, 0, 0, 0);
+      var daysLate = Math.max(0, Math.round((today - rd) / 86400000));
+      sheet.getRange(row, 19).setValue(daysLate); // S: # of Days Returned Late
+    }
+  }
 }
 
 function adminUpdateStatus(formData) {
@@ -182,18 +204,22 @@ function adminUpdateStatus(formData) {
     return { success: false, message: 'Invalid request.' };
   }
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
-  sheet.getRange(row, RSVP_STATUS_COL).setValue(newStatus);
-  if (newStatus === 'Returned') {
-    var returnDateCell = sheet.getRange(row, 13).getValue(); // M: Return Date
-    var today = new Date(); today.setHours(0, 0, 0, 0);
-    sheet.getRange(row, 18).setValue(today); // R: Actual Return Date
-    if (returnDateCell) {
-      var rd = returnDateCell instanceof Date ? new Date(returnDateCell) : new Date(returnDateCell);
-      rd.setHours(0, 0, 0, 0);
-      var daysLate = Math.max(0, Math.round((today - rd) / 86400000));
-      sheet.getRange(row, 19).setValue(daysLate); // S: # of Days Returned Late
-    }
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  applyReservationStatus(sheet, row, newStatus, today);
+  return { success: true };
+}
+
+function adminBatchUpdateStatus(formData) {
+  if (!checkAdminPasscode(formData.passcode)) return { success: false, message: 'Invalid passcode.' };
+  var newStatus = String(formData.status || '').trim();
+  var validStatuses = ['Confirmed', 'Cancelled', 'Lent Out', 'Returned', 'Lost or Damaged'];
+  var rows = (Array.isArray(formData.rows) ? formData.rows : []).map(function(r) { return parseInt(r); }).filter(function(r) { return r && r >= 2; });
+  if (!rows.length || validStatuses.indexOf(newStatus) === -1) {
+    return { success: false, message: 'Invalid request.' };
   }
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  rows.forEach(function(row) { applyReservationStatus(sheet, row, newStatus, today); });
   return { success: true };
 }
 

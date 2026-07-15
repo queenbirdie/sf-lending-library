@@ -15,15 +15,21 @@
   </div>
 
   <div id="dashboard" class="admin-container" style="display:none">
-    <nav class="admin-jumpnav" id="adminJumpNav">
-      <a href="#section-pending" class="admin-jumpnav-pill" onclick="return jumpToSection('pending', event)">New <span id="navPendingCount" class="admin-count-badge"></span></a>
-      <a href="#section-overdue" class="admin-jumpnav-pill" onclick="return jumpToSection('overdue', event)">Overdue <span id="navOverdueCount" class="admin-count-badge"></span></a>
-      <a href="#section-pickups" class="admin-jumpnav-pill" onclick="return jumpToSection('pickups', event)">Pickups <span id="navPickupsCount" class="admin-count-badge"></span></a>
-      <a href="#section-returns" class="admin-jumpnav-pill" onclick="return jumpToSection('returns', event)">Returns <span id="navReturnsCount" class="admin-count-badge"></span></a>
-      <a href="#section-upcoming" class="admin-jumpnav-pill" onclick="return jumpToSection('upcoming', event)">Upcoming <span id="navUpcomingCount" class="admin-count-badge"></span></a>
-      <a href="#section-checkedOut" class="admin-jumpnav-pill" onclick="return jumpToSection('checkedOut', event)">Out <span id="navCheckedOutCount" class="admin-count-badge"></span></a>
-      <a href="#section-conflicts" class="admin-jumpnav-pill" onclick="return jumpToSection('conflicts', event)">Conflicts <span id="navConflictsCount" class="admin-count-badge"></span></a>
-    </nav>
+    <div class="admin-sticky-bar">
+      <div class="admin-search-wrap">
+        <input type="search" id="adminSearch" class="admin-search-input" placeholder="Search name, email, phone, item…" oninput="filterAdminSearch(this.value)">
+      </div>
+      <nav class="admin-jumpnav" id="adminJumpNav">
+        <a href="#section-pending" class="admin-jumpnav-pill" onclick="return jumpToSection('pending', event)">New <span id="navPendingCount" class="admin-count-badge"></span></a>
+        <a href="#section-todayReturns" class="admin-jumpnav-pill" onclick="return jumpToSection('todayReturns', event)">Today <span id="navTodayReturnsCount" class="admin-count-badge"></span></a>
+        <a href="#section-overdue" class="admin-jumpnav-pill" onclick="return jumpToSection('overdue', event)">Overdue <span id="navOverdueCount" class="admin-count-badge"></span></a>
+        <a href="#section-pickups" class="admin-jumpnav-pill" onclick="return jumpToSection('pickups', event)">Pickups <span id="navPickupsCount" class="admin-count-badge"></span></a>
+        <a href="#section-returns" class="admin-jumpnav-pill" onclick="return jumpToSection('returns', event)">Returns <span id="navReturnsCount" class="admin-count-badge"></span></a>
+        <a href="#section-upcoming" class="admin-jumpnav-pill" onclick="return jumpToSection('upcoming', event)">Upcoming <span id="navUpcomingCount" class="admin-count-badge"></span></a>
+        <a href="#section-checkedOut" class="admin-jumpnav-pill" onclick="return jumpToSection('checkedOut', event)">Out <span id="navCheckedOutCount" class="admin-count-badge"></span></a>
+        <a href="#section-conflicts" class="admin-jumpnav-pill" onclick="return jumpToSection('conflicts', event)">Conflicts <span id="navConflictsCount" class="admin-count-badge"></span></a>
+      </nav>
+    </div>
     <div class="admin-toolbar">
       <button class="clear-btn" onclick="loadAdminData()">&#8635; Refresh</button>
     </div>
@@ -35,6 +41,13 @@
           <span class="admin-chevron" id="chevron-pending">&#9662;</span>
         </button>
         <div id="pendingList" class="admin-list"></div>
+      </section>
+      <section class="admin-section" id="section-todayReturns">
+        <button type="button" class="admin-section-header" onclick="toggleSection('todayReturns')">
+          <span class="admin-section-title">Today's returns <span id="todayReturnsCount" class="admin-count-badge"></span></span>
+          <span class="admin-chevron" id="chevron-todayReturns">&#9662;</span>
+        </button>
+        <div id="todayReturnsList" class="admin-list"></div>
       </section>
       <section class="admin-section" id="section-upcoming">
         <button type="button" class="admin-section-header" onclick="toggleSection('upcoming')">

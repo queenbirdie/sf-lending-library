@@ -230,7 +230,11 @@ header p { font-size: 0.95rem; opacity: 0.88; }
 .admin-passcode-input { font-family: var(--font-body); font-size: 1.1rem; text-align: center; letter-spacing: 0.2em; border: 2px solid var(--line); border-radius: 10px; padding: 0.6rem; width: 100%; max-width: 220px; margin-bottom: 1rem; outline: none; }
 .admin-passcode-input:focus { border-color: var(--accent); }
 .admin-toolbar { display: flex; justify-content: flex-end; margin-bottom: 1rem; }
-.admin-jumpnav { position: sticky; top: 0; z-index: 5; display: flex; gap: 0.5rem; overflow-x: auto; -webkit-overflow-scrolling: touch; background: var(--bg); padding: 0.75rem 0; margin: 0 -1rem 1rem; padding-left: 1rem; padding-right: 1rem; border-bottom: 1px solid var(--line); }
+.admin-sticky-bar { position: sticky; top: 0; z-index: 5; background: var(--bg); margin: 0 -1rem 1rem; padding: 0.75rem 1rem 0; border-bottom: 1px solid var(--line); }
+.admin-search-wrap { margin-bottom: 0.6rem; }
+.admin-search-input { width: 100%; font-family: var(--font-body); font-size: 0.9rem; color: var(--ink); background: var(--card-bg); border: 1.5px solid var(--line); border-radius: 10px; padding: 0.6rem 0.75rem; min-height: 44px; outline: none; }
+.admin-search-input:focus { border-color: var(--accent); }
+.admin-jumpnav { display: flex; gap: 0.5rem; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.75rem; }
 .admin-jumpnav-pill { flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.35rem; background: var(--card-bg); border-radius: 20px; padding: 0.4rem 0.8rem; font-size: 0.8rem; font-weight: 800; color: var(--text-secondary); text-decoration: none; box-shadow: 0 1px 3px rgba(31,44,61,0.08); white-space: nowrap; }
 .admin-jumpnav-pill:active { background: var(--soft-bg); }
 .admin-jumpnav-pill .admin-count-badge { font-size: 0.68rem; }
@@ -250,7 +254,18 @@ header p { font-size: 0.95rem; opacity: 0.88; }
 .admin-card-detail { font-size: 0.85rem; color: var(--text-secondary); line-height: 1.55; }
 .admin-card-detail a { color: var(--accent); text-decoration: none; }
 .admin-card-detail a:hover { text-decoration: underline; }
+.admin-item-row { display: flex; align-items: flex-start; gap: 0.6rem; margin-bottom: 0.4rem; }
+.admin-card-thumb { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; flex-shrink: 0; background: var(--soft-bg); }
+.admin-card-thumb-empty { visibility: hidden; }
+.admin-item-text { font-size: 0.85rem; color: var(--ink); font-weight: 700; line-height: 1.5; padding-top: 0.1rem; }
+.admin-qty-badge { display: inline-block; background: var(--accent); color: white; font-family: var(--font-stamp); font-size: 0.68rem; font-weight: 400; padding: 0.05rem 0.4rem; border-radius: 3px; margin-left: 0.3rem; vertical-align: middle; }
 .admin-card-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.65rem; }
+.admin-btn-bulk { flex-basis: 100%; background: var(--ink); color: white; }
+.admin-btn-bulk:hover { background: #33445a; }
+.admin-group-items { display: flex; flex-direction: column; }
+.admin-group-item { padding-top: 0.75rem; margin-top: 0.75rem; border-top: 1px dashed var(--line); }
+.admin-group-item:first-child { padding-top: 0; margin-top: 0; border-top: none; }
+.search-hidden { display: none !important; }
 .admin-btn { flex: 1; min-width: 100px; border: none; border-radius: 8px; padding: 0.5rem; font-family: var(--font-body); font-size: 0.82rem; font-weight: 800; cursor: pointer; }
 .admin-btn:disabled { opacity: 0.6; cursor: default; }
 .admin-btn-confirm { background: #D6EDD9; color: #2A7040; }

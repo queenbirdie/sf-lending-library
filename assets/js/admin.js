@@ -1,6 +1,6 @@
 var adminPasscode = sessionStorage.getItem('sfll_admin_passcode') || '';
 var TIME_WINDOWS = ['8 - 9am', '9 - 10am', '10 - 11am', '11am - 12pm', '12 - 1pm', '1 - 2pm', '2 - 3pm', '3 - 4pm', '4 - 5pm', '5 - 6pm', '6 - 7pm', '7 - 8pm'];
-var SECTION_KEYS = ['pending', 'upcoming', 'pickups', 'returns', 'checkedOut', 'overdue', 'conflicts'];
+var SECTION_KEYS = ['pending', 'todayReturns', 'upcoming', 'pickups', 'returns', 'checkedOut', 'overdue', 'conflicts'];
 var sectionCollapseOverride = {};
 
 if (adminPasscode) {
@@ -38,7 +38,8 @@ function loadAdminData(cb) {
     var ok = data && Array.isArray(data.pending);
     if (!ok) { if (cb) cb(false); return; }
     document.getElementById('adminContent').style.display = 'block';
-    renderSection('pendingList', 'pendingCount', data.pending, ['confirm', 'decline', 'revise']);
+    renderGroupedSection('pendingList', 'pendingCount', data.pending, ['confirm', 'decline', 'revise'], { label: 'Confirm all', status: 'Confirmed', hoistMeta: true });
+    renderGroupedSection('todayReturnsList', 'todayReturnsCount', sortByTime(data.todayReturns || []), ['markReturned', 'lostDamaged', 'revise'], { label: 'Mark all returned', status: 'Returned', hoistMeta: false });
     renderSection('upcomingList', 'upcomingCount', data.upcoming || [], ['markLentOut', 'revise', 'cancel']);
     renderSection('pickupsList', 'pickupsCount', data.tomorrowPickups || [], ['markLentOut', 'revise', 'cancel']);
     renderSection('returnsList', 'returnsCount', data.tomorrowReturns || [], ['markReturned', 'revise']);
@@ -46,6 +47,7 @@ function loadAdminData(cb) {
     renderSection('overdueList', 'overdueCount', data.overdue || [], ['markReturned', 'revise'], true);
     renderConflicts(data.conflicts || []);
     SECTION_KEYS.forEach(applySectionState);
+    filterAdminSearch(document.getElementById('adminSearch').value);
     if (cb) cb(true);
   }, function() {
     document.getElementById('adminLoading').style.display = 'none';
@@ -53,12 +55,49 @@ function loadAdminData(cb) {
   });
 }
 
-function itemLine(e) {
-  var label = e.item;
+function sortByTime(items) {
+  return items.slice().sort(function(a, b) {
+    var ia = TIME_WINDOWS.indexOf(a.returnTime), ib = TIME_WINDOWS.indexOf(b.returnTime);
+    if (ia === -1) ia = TIME_WINDOWS.length;
+    if (ib === -1) ib = TIME_WINDOWS.length;
+    return ia - ib;
+  });
+}
+
+function groupItems(items) {
+  var order = [], map = {};
+  items.forEach(function(e) {
+    var k = e.groupKey || ('row-' + e.row);
+    if (!map[k]) { map[k] = []; order.push(k); }
+    map[k].push(e);
+  });
+  return order.map(function(k) { return map[k]; });
+}
+
+function searchTextFor(e) {
+  return [e.name, e.email, e.phone, e.item, e.brand, e.library].filter(Boolean).join(' ').toLowerCase();
+}
+
+function itemLineHtml(e) {
   var details = [e.brand, e.size].filter(Boolean).join(', ');
-  if (details) label += ' (' + details + ')';
-  if (e.qty > 1) label += ' \xd7' + e.qty;
-  return label;
+  var label = esc(e.item) + (details ? ' (' + esc(details) + ')' : '');
+  var qtyBadge = e.qty > 1 ? ' <span class="admin-qty-badge">\xd7' + e.qty + '</span>' : '';
+  var thumb = e.imageUrl ? '<img class="admin-card-thumb" src="' + esc(e.imageUrl) + '" alt="" loading="lazy" onerror="this.remove()">' : '<div class="admin-card-thumb admin-card-thumb-empty"></div>';
+  var avail = availabilityBadgeHtml(e.availabilityStatus);
+  return '<div class="admin-item-row">' + thumb + '<div class="admin-item-text">' + label + qtyBadge + (avail ? '<br>' + avail : '') + '</div></div>';
+}
+
+function availabilityBadgeHtml(status) {
+  if (!status) return '';
+  var cls = status.indexOf('Unavailable') !== -1 ? 'badge-out' : status.indexOf('Tight') !== -1 ? 'badge-tight' : status.indexOf('Available') !== -1 ? 'badge-available' : 'badge-neutral';
+  return '<span class="badge ' + cls + '">' + esc(status) + '</span>';
+}
+
+function metaHtml(e, showLate) {
+  var lateLine = (showLate && e.daysLate) ? '<br><span class="admin-card-late">' + e.daysLate + ' day' + (e.daysLate === 1 ? '' : 's') + ' late</span>' : '';
+  return '<div class="admin-card-detail">' +
+    esc(e.pickupDate) + (e.pickupTime ? ' \xb7 ' + esc(e.pickupTime) : '') + ' &#8594; ' + esc(e.returnDate) + (e.returnTime ? ' \xb7 ' + esc(e.returnTime) : '') + lateLine + '<br>' +
+    '<a href="tel:' + esc(e.phone) + '">' + esc(e.phone) + '</a> &middot; <a href="mailto:' + esc(e.email) + '">' + esc(e.email) + '</a></div>';
 }
 
 var sectionCounts = {};
@@ -105,6 +144,28 @@ function jumpToSection(key, e) {
   return false;
 }
 
+function filterAdminSearch(query) {
+  var q = query.trim().toLowerCase();
+  SECTION_KEYS.forEach(function(key) {
+    var listEl = document.getElementById(key + 'List');
+    if (!listEl) return;
+    var cards = listEl.querySelectorAll('[data-search]');
+    if (!cards.length) { if (!q) applySectionState(key); return; }
+    if (!q) {
+      cards.forEach(function(card) { card.classList.remove('search-hidden'); });
+      applySectionState(key);
+      return;
+    }
+    var anyMatch = false;
+    cards.forEach(function(card) {
+      var match = (card.getAttribute('data-search') || '').indexOf(q) !== -1;
+      card.classList.toggle('search-hidden', !match);
+      if (match) anyMatch = true;
+    });
+    setSectionCollapsed(key, !anyMatch);
+  });
+}
+
 var ACTION_DEFS = {
   confirm:      { label: 'Confirm',        cls: 'admin-btn-confirm', onclick: function(e) { return 'updateStatus(' + e.row + ",'Confirmed',this)"; } },
   decline:      { label: 'Decline',        cls: 'admin-btn-decline', onclick: function(e) { return 'updateStatus(' + e.row + ",'Cancelled',this)"; } },
@@ -114,6 +175,13 @@ var ACTION_DEFS = {
   lostDamaged:  { label: 'Lost/Damaged',   cls: 'admin-btn-decline', onclick: function(e) { return 'updateStatus(' + e.row + ",'Lost or Damaged',this)"; } },
   revise:       { label: 'Revise',         cls: 'admin-btn-neutral', onclick: function(e) { return 'toggleRevise(' + e.row + ')'; } }
 };
+
+function actionButtonsHtml(e, actions) {
+  return actions.map(function(key) {
+    var a = ACTION_DEFS[key];
+    return '<button class="admin-btn ' + a.cls + '" onclick="' + a.onclick(e) + '">' + a.label + '</button>';
+  }).join('');
+}
 
 function timeSelectHtml(id, current) {
   var opts = '<option value="">Select window</option>';
@@ -175,18 +243,38 @@ function renderSection(listId, countId, items, actions, showLate) {
   var el = document.getElementById(listId);
   if (!items.length) { el.innerHTML = '<div class="admin-empty">Nothing here.</div>'; return; }
   el.innerHTML = items.map(function(e) {
-    var lateLine = (showLate && e.daysLate) ? '<br><span class="admin-card-late">' + e.daysLate + ' day' + (e.daysLate === 1 ? '' : 's') + ' late</span>' : '';
-    var buttonsHtml = actions.map(function(key) {
-      var a = ACTION_DEFS[key];
-      return '<button class="admin-btn ' + a.cls + '" onclick="' + a.onclick(e) + '">' + a.label + '</button>';
-    }).join('');
-    return '<div class="admin-card">' +
+    return '<div class="admin-card" data-search="' + esc(searchTextFor(e)) + '">' +
       '<div class="admin-card-top"><span class="admin-card-name">' + esc(e.name) + '</span><span class="admin-card-lib">' + esc(e.library) + '</span></div>' +
-      '<div class="admin-card-detail">' + esc(itemLine(e)) + '<br>' +
-      esc(e.pickupDate) + (e.pickupTime ? ' \xb7 ' + esc(e.pickupTime) : '') + ' &#8594; ' + esc(e.returnDate) + (e.returnTime ? ' \xb7 ' + esc(e.returnTime) : '') + lateLine + '<br>' +
-      '<a href="tel:' + esc(e.phone) + '">' + esc(e.phone) + '</a> &middot; <a href="mailto:' + esc(e.email) + '">' + esc(e.email) + '</a></div>' +
-      '<div class="admin-card-actions">' + buttonsHtml + '</div>' +
+      itemLineHtml(e) +
+      metaHtml(e, showLate) +
+      '<div class="admin-card-actions">' + actionButtonsHtml(e, actions) + '</div>' +
       reviseFormHtml(e) +
+      '</div>';
+  }).join('');
+}
+
+function renderGroupedSection(listId, countId, items, actions, bulkDef) {
+  setCount(countId, items.length);
+  var el = document.getElementById(listId);
+  if (!items.length) { el.innerHTML = '<div class="admin-empty">Nothing here.</div>'; return; }
+  var groups = groupItems(items);
+  el.innerHTML = groups.map(function(group) {
+    var first = group[0];
+    var searchText = group.map(searchTextFor).join(' ');
+    var bulkBtn = (group.length > 1) ? '<button class="admin-btn admin-btn-bulk" onclick="bulkUpdateStatus(' + JSON.stringify(group.map(function(g) { return g.row; })) + ",'" + bulkDef.status + "',this,'" + esc(bulkDef.label) + "')\">" + esc(bulkDef.label) + ' (' + group.length + ')</button>' : '';
+    var itemsHtml = group.map(function(e) {
+      return '<div class="admin-group-item">' +
+        itemLineHtml(e) +
+        (bulkDef.hoistMeta ? '' : metaHtml(e, false)) +
+        '<div class="admin-card-actions">' + actionButtonsHtml(e, actions) + '</div>' +
+        reviseFormHtml(e) +
+        '</div>';
+    }).join('');
+    return '<div class="admin-card admin-group-card" data-search="' + esc(searchText) + '">' +
+      '<div class="admin-card-top"><span class="admin-card-name">' + esc(first.name) + '</span><span class="admin-card-lib">' + esc(first.library) + '</span></div>' +
+      (bulkDef.hoistMeta ? metaHtml(first, false) : '') +
+      (bulkBtn ? '<div class="admin-card-actions">' + bulkBtn + '</div>' : '') +
+      '<div class="admin-group-items">' + itemsHtml + '</div>' +
       '</div>';
   }).join('');
 }
@@ -216,6 +304,24 @@ function updateStatus(row, status, btn) {
     }
   }, function() {
     btn.disabled = false;
+    alert('Something went wrong — please try again.');
+  });
+}
+
+function bulkUpdateStatus(rows, status, btn, label) {
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  apiPost({ action: 'adminBatchUpdateStatus', passcode: adminPasscode, rows: rows, status: status }, function(result) {
+    if (result.success) {
+      loadAdminData();
+    } else {
+      btn.disabled = false;
+      btn.textContent = label + ' (' + rows.length + ')';
+      alert(result.message || 'Something went wrong.');
+    }
+  }, function() {
+    btn.disabled = false;
+    btn.textContent = label + ' (' + rows.length + ')';
     alert('Something went wrong — please try again.');
   });
 }

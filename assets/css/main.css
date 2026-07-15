@@ -210,8 +210,15 @@ header p { font-size: 0.95rem; opacity: 0.88; }
 .admin-passcode-input { font-family: 'Nunito', sans-serif; font-size: 1.1rem; text-align: center; letter-spacing: 0.2em; border: 2px solid #EAD9C8; border-radius: 10px; padding: 0.6rem; width: 100%; max-width: 220px; margin-bottom: 1rem; outline: none; }
 .admin-passcode-input:focus { border-color: #E07A5F; }
 .admin-toolbar { display: flex; justify-content: flex-end; margin-bottom: 1rem; }
+.admin-jumpnav { position: sticky; top: 0; z-index: 5; display: flex; gap: 0.5rem; overflow-x: auto; -webkit-overflow-scrolling: touch; background: #FAF7F2; padding: 0.75rem 0; margin: 0 -1rem 1rem; padding-left: 1rem; padding-right: 1rem; border-bottom: 1px solid #EAD9C8; }
+.admin-jumpnav-pill { flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.35rem; background: white; border-radius: 20px; padding: 0.4rem 0.8rem; font-size: 0.8rem; font-weight: 800; color: #7A6558; text-decoration: none; box-shadow: 0 1px 3px rgba(0,0,0,0.08); white-space: nowrap; }
+.admin-jumpnav-pill:active { background: #FDF0EB; }
+.admin-jumpnav-pill .admin-count-badge { font-size: 0.68rem; }
 .admin-section { margin-bottom: 2rem; }
-.admin-section-title { font-size: 0.95rem; font-weight: 800; color: #3D3530; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 2px solid #EAD9C8; }
+.admin-section-header { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; background: none; border: none; padding: 0.4rem 0; margin-bottom: 0.35rem; padding-bottom: 0.5rem; border-bottom: 2px solid #EAD9C8; cursor: pointer; text-align: left; min-height: 44px; }
+.admin-chevron { font-size: 0.7rem; color: #B0A097; flex-shrink: 0; }
+.admin-section.collapsed .admin-section-header { border-bottom-color: #F0EAE4; margin-bottom: 0; }
+.admin-section-title { font-size: 0.95rem; font-weight: 800; color: #3D3530; display: flex; align-items: center; gap: 0.5rem; }
 .admin-count-badge { background: #E07A5F; color: white; font-size: 0.72rem; font-weight: 800; padding: 0.1rem 0.55rem; border-radius: 20px; min-width: 1.2rem; text-align: center; }
 .admin-count-badge.zero { background: #EDE8E3; color: #9E8C7E; }
 .admin-list { display: flex; flex-direction: column; gap: 0.6rem; }

@@ -1,5 +1,7 @@
 var adminPasscode = sessionStorage.getItem('sfll_admin_passcode') || '';
 var TIME_WINDOWS = ['8 - 9am', '9 - 10am', '10 - 11am', '11am - 12pm', '12 - 1pm', '1 - 2pm', '2 - 3pm', '3 - 4pm', '4 - 5pm', '5 - 6pm', '6 - 7pm', '7 - 8pm'];
+var SECTION_KEYS = ['pending', 'upcoming', 'pickups', 'returns', 'checkedOut', 'overdue', 'conflicts'];
+var sectionCollapseOverride = {};
 
 if (adminPasscode) {
   document.getElementById('lockScreen').style.display = 'none';
@@ -43,6 +45,7 @@ function loadAdminData(cb) {
     renderSection('checkedOutList', 'checkedOutCount', data.checkedOut || [], ['markReturned', 'lostDamaged', 'revise']);
     renderSection('overdueList', 'overdueCount', data.overdue || [], ['markReturned', 'revise'], true);
     renderConflicts(data.conflicts || []);
+    SECTION_KEYS.forEach(applySectionState);
     if (cb) cb(true);
   }, function() {
     document.getElementById('adminLoading').style.display = 'none';
@@ -58,10 +61,48 @@ function itemLine(e) {
   return label;
 }
 
+var sectionCounts = {};
+
 function setCount(id, n) {
-  var el = document.getElementById(id);
-  el.textContent = n;
-  el.className = 'admin-count-badge' + (n === 0 ? ' zero' : '');
+  var key = id.replace(/Count$/, '');
+  sectionCounts[key] = n;
+  ['', 'nav'].forEach(function(prefix) {
+    var elId = prefix ? prefix + id.charAt(0).toUpperCase() + id.slice(1) : id;
+    var el = document.getElementById(elId);
+    if (!el) return;
+    el.textContent = n;
+    el.className = 'admin-count-badge' + (n === 0 ? ' zero' : '');
+  });
+}
+
+function setSectionCollapsed(key, collapsed) {
+  var listEl = document.getElementById(key + 'List');
+  var chevron = document.getElementById('chevron-' + key);
+  var sectionEl = document.getElementById('section-' + key);
+  if (listEl) listEl.style.display = collapsed ? 'none' : '';
+  if (chevron) chevron.innerHTML = collapsed ? '&#9656;' : '&#9662;';
+  if (sectionEl) sectionEl.classList.toggle('collapsed', collapsed);
+}
+
+function applySectionState(key) {
+  var collapsed = sectionCollapseOverride.hasOwnProperty(key) ? sectionCollapseOverride[key] : (sectionCounts[key] || 0) === 0;
+  setSectionCollapsed(key, collapsed);
+}
+
+function toggleSection(key) {
+  var listEl = document.getElementById(key + 'List');
+  var collapsing = listEl.style.display !== 'none';
+  sectionCollapseOverride[key] = collapsing;
+  setSectionCollapsed(key, collapsing);
+}
+
+function jumpToSection(key, e) {
+  if (e) e.preventDefault();
+  sectionCollapseOverride[key] = false;
+  setSectionCollapsed(key, false);
+  var el = document.getElementById('section-' + key);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  return false;
 }
 
 var ACTION_DEFS = {

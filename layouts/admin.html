@@ -15,37 +15,67 @@
   </div>
 
   <div id="dashboard" class="admin-container" style="display:none">
+    <nav class="admin-jumpnav" id="adminJumpNav">
+      <a href="#section-pending" class="admin-jumpnav-pill" onclick="return jumpToSection('pending', event)">New <span id="navPendingCount" class="admin-count-badge"></span></a>
+      <a href="#section-overdue" class="admin-jumpnav-pill" onclick="return jumpToSection('overdue', event)">Overdue <span id="navOverdueCount" class="admin-count-badge"></span></a>
+      <a href="#section-pickups" class="admin-jumpnav-pill" onclick="return jumpToSection('pickups', event)">Pickups <span id="navPickupsCount" class="admin-count-badge"></span></a>
+      <a href="#section-returns" class="admin-jumpnav-pill" onclick="return jumpToSection('returns', event)">Returns <span id="navReturnsCount" class="admin-count-badge"></span></a>
+      <a href="#section-upcoming" class="admin-jumpnav-pill" onclick="return jumpToSection('upcoming', event)">Upcoming <span id="navUpcomingCount" class="admin-count-badge"></span></a>
+      <a href="#section-checkedOut" class="admin-jumpnav-pill" onclick="return jumpToSection('checkedOut', event)">Out <span id="navCheckedOutCount" class="admin-count-badge"></span></a>
+      <a href="#section-conflicts" class="admin-jumpnav-pill" onclick="return jumpToSection('conflicts', event)">Conflicts <span id="navConflictsCount" class="admin-count-badge"></span></a>
+    </nav>
     <div class="admin-toolbar">
       <button class="clear-btn" onclick="loadAdminData()">&#8635; Refresh</button>
     </div>
     <div id="adminLoading" class="loading">Loading...</div>
     <div id="adminContent" style="display:none">
-      <section class="admin-section">
-        <h2 class="admin-section-title">New requests <span id="pendingCount" class="admin-count-badge"></span></h2>
+      <section class="admin-section" id="section-pending">
+        <button type="button" class="admin-section-header" onclick="toggleSection('pending')">
+          <span class="admin-section-title">New requests <span id="pendingCount" class="admin-count-badge"></span></span>
+          <span class="admin-chevron" id="chevron-pending">&#9662;</span>
+        </button>
         <div id="pendingList" class="admin-list"></div>
       </section>
-      <section class="admin-section">
-        <h2 class="admin-section-title">Upcoming reservations <span id="upcomingCount" class="admin-count-badge"></span></h2>
+      <section class="admin-section" id="section-upcoming">
+        <button type="button" class="admin-section-header" onclick="toggleSection('upcoming')">
+          <span class="admin-section-title">Upcoming reservations <span id="upcomingCount" class="admin-count-badge"></span></span>
+          <span class="admin-chevron" id="chevron-upcoming">&#9662;</span>
+        </button>
         <div id="upcomingList" class="admin-list"></div>
       </section>
-      <section class="admin-section">
-        <h2 class="admin-section-title">Tomorrow's pickups <span id="pickupsCount" class="admin-count-badge"></span></h2>
+      <section class="admin-section" id="section-pickups">
+        <button type="button" class="admin-section-header" onclick="toggleSection('pickups')">
+          <span class="admin-section-title">Tomorrow's pickups <span id="pickupsCount" class="admin-count-badge"></span></span>
+          <span class="admin-chevron" id="chevron-pickups">&#9662;</span>
+        </button>
         <div id="pickupsList" class="admin-list"></div>
       </section>
-      <section class="admin-section">
-        <h2 class="admin-section-title">Tomorrow's returns <span id="returnsCount" class="admin-count-badge"></span></h2>
+      <section class="admin-section" id="section-returns">
+        <button type="button" class="admin-section-header" onclick="toggleSection('returns')">
+          <span class="admin-section-title">Tomorrow's returns <span id="returnsCount" class="admin-count-badge"></span></span>
+          <span class="admin-chevron" id="chevron-returns">&#9662;</span>
+        </button>
         <div id="returnsList" class="admin-list"></div>
       </section>
-      <section class="admin-section">
-        <h2 class="admin-section-title">Currently checked out <span id="checkedOutCount" class="admin-count-badge"></span></h2>
+      <section class="admin-section" id="section-checkedOut">
+        <button type="button" class="admin-section-header" onclick="toggleSection('checkedOut')">
+          <span class="admin-section-title">Currently checked out <span id="checkedOutCount" class="admin-count-badge"></span></span>
+          <span class="admin-chevron" id="chevron-checkedOut">&#9662;</span>
+        </button>
         <div id="checkedOutList" class="admin-list"></div>
       </section>
-      <section class="admin-section">
-        <h2 class="admin-section-title">Overdue returns <span id="overdueCount" class="admin-count-badge"></span></h2>
+      <section class="admin-section" id="section-overdue">
+        <button type="button" class="admin-section-header" onclick="toggleSection('overdue')">
+          <span class="admin-section-title">Overdue returns <span id="overdueCount" class="admin-count-badge"></span></span>
+          <span class="admin-chevron" id="chevron-overdue">&#9662;</span>
+        </button>
         <div id="overdueList" class="admin-list"></div>
       </section>
-      <section class="admin-section">
-        <h2 class="admin-section-title">Double-booking conflicts <span id="conflictsCount" class="admin-count-badge"></span></h2>
+      <section class="admin-section" id="section-conflicts">
+        <button type="button" class="admin-section-header" onclick="toggleSection('conflicts')">
+          <span class="admin-section-title">Double-booking conflicts <span id="conflictsCount" class="admin-count-badge"></span></span>
+          <span class="admin-chevron" id="chevron-conflicts">&#9662;</span>
+        </button>
         <div id="conflictsList" class="admin-list"></div>
       </section>
     </div>

@@ -5,6 +5,81 @@ Apps Script backend. If you already did the first version of this setup,
 this is an **update** — see the "Update, 2026-07-13" section below; you
 don't need to redo Step 1/2 from scratch, just replace `Admin.gs`.
 
+There's also a small **separate** change below ("Retire the KG Avail /
+KG Out helper tabs") that touches `Code.js` directly rather than
+`Admin.gs` — do that one too while you're in the editor.
+
+## Retire the KG Avail / KG Out helper tabs
+
+Now that the admin dashboard covers "what's upcoming" and "what's
+checked out," those 8 auto-generated tabs (`KG Avail`, `KG Out`,
+`PS Avail`, `PS Out`, `KC Avail`, `KC Out`, `PG Avail`, `PG Out`) are
+redundant. Nothing reads from them — not the live site, not the admin
+dashboard, not the email/calendar-invite logic — so they're safe to
+delete. But your existing code auto-*recreates* them whenever you edit
+Inventory, or a reservation's status changes to Returned, Cancelled,
+Lent Out, or "Added to existing request." To stop that:
+
+1. Open **`Code.js`**, find the `onSheetEdit` function. It currently
+   looks like this:
+
+```javascript
+function onSheetEdit(e) {
+  var sheetName = e.range.getSheet().getName();
+  if (sheetName === INV_TAB) {
+    var row = e.range.getRow();
+    if (row > 1) {
+      var libraryKey = String(e.range.getSheet().getRange(row, COL_LIBRARY + 1).getValue()).trim();
+      if (libraryKey) { buildAvailabilityCalendar(libraryKey); buildCurrentlyOut(libraryKey); }
+      else { LIBRARIES.forEach(function(lib) { buildAvailabilityCalendar(lib.key); buildCurrentlyOut(lib.key); }); }
+    }
+  } else if (sheetName === RSVP_TAB && e.range.getColumn() === RSVP_STATUS_COL) {
+    var libKey = String(e.range.getSheet().getRange(e.range.getRow(), RSVP_LIBRARY_COL).getValue()).trim();
+    var newStatus = String(e.value || '').trim();
+    // Send email + calendar invites first — before any slow rebuilds that could time out
+    if (newStatus && newStatus !== 'Pending') { maybeSendCombinedConfirmation(e.range.getRow()); }
+    // Only rebuild availability when dates actually free up (Returned/Cancelled)
+    // Confirmed and Lent Out don't change availability — Pending already blocks those dates
+    if (newStatus === 'Returned' || newStatus === 'Cancelled') {
+      if (libKey) { buildAvailabilityCalendar(libKey); buildCurrentlyOut(libKey); }
+    } else {
+      // Still update Currently Out for Lent Out status
+      if ((newStatus === 'Lent Out' || newStatus === 'Added to existing request') && libKey) { buildCurrentlyOut(libKey); }
+    }
+    clearAvailabilityCache(libKey || null);
+    colorizeReservations();
+  }
+}
+```
+
+2. Replace the whole function with this trimmed version — it keeps
+   everything that actually matters (confirmation emails, calendar
+   invites, cache-clearing so the live site updates instantly, and
+   the reservations sheet recoloring) and just drops the tab rebuilds:
+
+```javascript
+function onSheetEdit(e) {
+  var sheetName = e.range.getSheet().getName();
+  if (sheetName === RSVP_TAB && e.range.getColumn() === RSVP_STATUS_COL) {
+    var libKey = String(e.range.getSheet().getRange(e.range.getRow(), RSVP_LIBRARY_COL).getValue()).trim();
+    var newStatus = String(e.value || '').trim();
+    if (newStatus && newStatus !== 'Pending') { maybeSendCombinedConfirmation(e.range.getRow()); }
+    clearAvailabilityCache(libKey || null);
+    colorizeReservations();
+  }
+}
+```
+
+3. **Deploy → Manage deployments → pencil icon → New version → Deploy**
+   (bundle this with the Admin.gs update below — one deploy covers both).
+4. In the actual Google Sheet, right-click each of the 8 tabs listed
+   above and choose **Delete**. They won't come back.
+
+_(Note: `initializeAll()` still references `buildAvailabilityCalendar`/
+`buildCurrentlyOut` too, but that function only runs if you manually
+trigger it from the Apps Script editor — it's not on any automatic
+trigger, so leaving it as-is is harmless. No need to touch it.)_
+
 ## Update, 2026-07-13 — do this if you already set up Admin.gs before
 
 New features added: Upcoming Reservations view, Currently Checked Out

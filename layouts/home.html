@@ -1,13 +1,15 @@
 {{ define "main" }}
 <div class="home-header">
   <h1>{{ site.Title }}</h1>
-  <p>{{ site.Params.tagline }}</p>
+  <div class="home-tagline-stamp">{{ site.Params.tagline }}</div>
 </div>
 <div class="home-container">
   <div class="lib-grid">
     {{ range site.Data.libraries }}
     <a class="lib-card lib-card-{{ .key }}" href="{{ relURL .key }}/">
-      <div class="lib-card-emoji">{{ .emoji }}</div>
+      <div class="lib-card-tab">{{ .tabLabel }}</div>
+      <div class="lib-card-holes"><div class="lib-card-hole"></div><div class="lib-card-hole"></div></div>
+      <div class="lib-card-icon">{{ partial "lib-icon.html" .key }}</div>
       <div class="lib-card-name">{{ .name }}</div>
       <div class="lib-card-desc">{{ .desc }}</div>
       <div class="lib-card-cta">Browse &#8594;</div>

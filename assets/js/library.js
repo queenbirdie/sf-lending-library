@@ -337,7 +337,7 @@ function openModal() {
   if (!Object.keys(cart).length) return;
   document.getElementById('modalItemsList').innerHTML = Object.keys(cart).map(function(n) {
     var q = cart[n];
-    var label = q > 1 ? esc(n) + ' <span style="color:#B06B52;font-weight:800">\xd7' + q + '</span>' : esc(n);
+    var label = q > 1 ? esc(n) + ' <span style="color:#C0392B;font-weight:800">\xd7' + q + '</span>' : esc(n);
     return '<span class="modal-item-chip">' + label + '</span>';
   }).join('');
   var pickup = document.getElementById('pickupDate').value;

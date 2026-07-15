@@ -2,7 +2,7 @@
 {{ $key := .Params.key }}
 {{ $lib := index (where site.Data.libraries "key" $key) 0 }}
 <div id="libraryPage">
-  <header style="border-bottom: 4px solid {{ $lib.color }}">
+  <header style="background: {{ $lib.color }}">
     <a class="back-btn" href="{{ site.Home.RelPermalink }}">&#8592; All Libraries</a>
     <h1 id="libraryName">The SF Lending Library: {{ $lib.name }}</h1>
   </header>
@@ -67,7 +67,7 @@
           <h2>Request to borrow</h2>
           <button class="modal-close" onclick="closeModal()">&#10005;</button>
         </div>
-        <p style="font-size:0.8rem;color:#9E8C7E;text-align:center;padding:0.6rem 1.5rem 0;font-weight:600;">All fields are required.</p>
+        <p style="font-size:0.8rem;color:#6E7C8D;text-align:center;padding:0.6rem 1.5rem 0;font-weight:600;">All fields are required.</p>
         <div class="modal-body">
           <div>
             <div class="modal-section-label">Items</div>

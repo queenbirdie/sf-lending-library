@@ -223,8 +223,8 @@ header p { font-size: 0.95rem; opacity: 0.88; }
 .admin-card-detail { font-size: 0.85rem; color: #7A6558; line-height: 1.55; }
 .admin-card-detail a { color: #E07A5F; text-decoration: none; }
 .admin-card-detail a:hover { text-decoration: underline; }
-.admin-card-actions { display: flex; gap: 0.5rem; margin-top: 0.65rem; }
-.admin-btn { flex: 1; border: none; border-radius: 8px; padding: 0.5rem; font-family: 'Nunito', sans-serif; font-size: 0.82rem; font-weight: 800; cursor: pointer; }
+.admin-card-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.65rem; }
+.admin-btn { flex: 1; min-width: 100px; border: none; border-radius: 8px; padding: 0.5rem; font-family: 'Nunito', sans-serif; font-size: 0.82rem; font-weight: 800; cursor: pointer; }
 .admin-btn:disabled { opacity: 0.6; cursor: default; }
 .admin-btn-confirm { background: #D6EDD9; color: #2A7040; }
 .admin-btn-confirm:hover { background: #b8dfbd; }
@@ -232,5 +232,15 @@ header p { font-size: 0.95rem; opacity: 0.88; }
 .admin-btn-decline:hover { background: #fbdcd7; }
 .admin-btn-done { background: #FDF0EB; color: #B06B52; }
 .admin-btn-done:hover { background: #f5ddd0; }
+.admin-btn-neutral { background: #EDE8E3; color: #7A6558; }
+.admin-btn-neutral:hover { background: #e3ddd6; }
 .admin-card-late { color: #C0392B; font-weight: 800; }
 .admin-card.conflict { border: 2px solid #FEF3CD; }
+.admin-revise-form { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #F0EAE4; }
+.admin-revise-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 0.6rem; }
+.admin-revise-row-single { grid-template-columns: 1fr; max-width: 120px; }
+.admin-revise-field { display: flex; flex-direction: column; gap: 0.25rem; }
+.admin-revise-field label { font-size: 0.68rem; font-weight: 800; color: #7A6558; text-transform: uppercase; letter-spacing: 0.05em; }
+.admin-revise-field input, .admin-revise-field select { font-family: 'Nunito', sans-serif; font-size: 0.85rem; color: #3D3530; background: white; border: 1.5px solid #EAD9C8; border-radius: 8px; padding: 0.4rem 0.5rem; outline: none; width: 100%; }
+.admin-revise-field input:focus, .admin-revise-field select:focus { border-color: #E07A5F; }
+.admin-revise-error { font-size: 0.78rem; color: #C0392B; font-weight: 700; margin-bottom: 0.5rem; }

@@ -1,19 +1,51 @@
-# Admin dashboard — Apps Script setup (one-time)
+# Admin dashboard — Apps Script setup
 
-The admin dashboard at sflendinglibrary.org/admin/ is already live, but it
-needs a small addition to your Apps Script backend before it'll show real
-data. Two steps: paste in a new file, then edit one existing function.
+The admin dashboard at sflendinglibrary.org/admin/ needs this code in your
+Apps Script backend. If you already did the first version of this setup,
+this is an **update** — see the "Update, 2026-07-13" section below; you
+don't need to redo Step 1/2 from scratch, just replace `Admin.gs`.
 
-## Step 1 — Add a new script file
+## Update, 2026-07-13 — do this if you already set up Admin.gs before
 
-1. Open the Apps Script editor for **"SF Lending Library — Unified"**
-   (script.google.com, or Extensions → Apps Script from the Sheet).
-2. Click the **"+"** next to **Files** → **Script**.
-3. Name it `Admin` (it'll become `Admin.gs`).
-4. Delete the placeholder content and paste in everything below the line.
-5. **Change `CHANGE_ME` on the first real line to your own passcode** —
-   this is what you'll type into the dashboard's lock screen. Pick
-   something easy to type on a phone.
+New features added: Upcoming Reservations view, Currently Checked Out
+view, and a Revise action (edit dates/time/quantity on any reservation).
+
+1. **Before touching anything, open `Admin.gs` and copy your current
+   passcode** — the value after `var ADMIN_PASSCODE = '...'` on the first
+   real line. You'll need to paste it back in below.
+2. Select all the contents of `Admin.gs`, delete it, and paste in the
+   **full replacement code** from the "Complete Admin.gs" section below.
+3. Change `CHANGE_ME` on the first line back to **your own passcode**
+   (the one you copied in step 1 — don't leave it as `CHANGE_ME` or set
+   a new one unless you want to change it).
+4. Open `Code.js`, find `doPost`, and add **one more line** — see
+   "doPost update" below.
+5. **Deploy → Manage deployments → pencil icon → New version → Deploy.**
+   (Same as before — this step is what actually pushes the change live.)
+
+### doPost update
+
+Your `doPost` should already have `admin` and `adminUpdateStatus`
+branches from the first setup. Add `adminReviseReservation` as a third:
+
+```javascript
+    } else if (action === 'admin') {
+      result = getAdminData(body.passcode);
+    } else if (action === 'adminUpdateStatus') {
+      result = adminUpdateStatus(body);
+    } else if (action === 'adminReviseReservation') {
+      result = adminReviseReservation(body);
+    } else {
+      result = { success: false, message: 'Unknown action.' };
+    }
+```
+
+(If you're doing this for the first time and don't have the other two
+branches yet, see "First-time setup" below instead.)
+
+---
+
+## Complete Admin.gs (paste this whole thing in)
 
 ```javascript
 // ============================================
@@ -39,13 +71,17 @@ function getAdminData(passcode) {
     if (!(d instanceof Date)) d = new Date(d);
     return isNaN(d.getTime()) ? '' : Utilities.formatDate(d, tz, 'EEE, MMM d');
   }
+  function fmtISO(d) {
+    if (!(d instanceof Date)) d = new Date(d);
+    return isNaN(d.getTime()) ? '' : Utilities.formatDate(d, tz, 'yyyy-MM-dd');
+  }
   function isSameDay(d, ref) {
     var dt = d instanceof Date ? new Date(d) : new Date(d);
     dt.setHours(0, 0, 0, 0);
     return dt.getTime() === ref.getTime();
   }
 
-  var pending = [], tomorrowPickups = [], tomorrowReturns = [], overdue = [];
+  var pending = [], tomorrowPickups = [], tomorrowReturns = [], overdue = [], upcoming = [], checkedOut = [];
 
   for (var i = 1; i < rows.length; i++) {
     var r = rows[i];
@@ -53,6 +89,7 @@ function getAdminData(passcode) {
     var status = String(r[15]).trim();
     var entry = {
       row: rowNum,
+      status: status,
       library: String(r[0]).trim(),
       name: String(r[2]).trim(),
       email: String(r[3]).trim(),
@@ -61,8 +98,8 @@ function getAdminData(passcode) {
       brand: String(r[6] || '').trim(),
       size: String(r[9] || '').trim(),
       qty: (r[8] && !isNaN(parseInt(r[8]))) ? parseInt(r[8]) : 1,
-      pickupDate: fmt(r[10]), pickupTime: String(r[11] || '').trim(),
-      returnDate: fmt(r[12]), returnTime: String(r[13] || '').trim()
+      pickupDate: fmt(r[10]), pickupDateISO: fmtISO(r[10]), pickupTime: String(r[11] || '').trim(),
+      returnDate: fmt(r[12]), returnDateISO: fmtISO(r[12]), returnTime: String(r[13] || '').trim()
     };
 
     if (status === 'Pending') pending.push(entry);
@@ -76,14 +113,29 @@ function getAdminData(passcode) {
     if ((status === 'Lent Out' || status === 'Added to existing request') && r[12]) {
       var rd = r[12] instanceof Date ? new Date(r[12]) : new Date(r[12]);
       rd.setHours(0, 0, 0, 0);
+      var eCheckedOut = {};
+      for (var k in entry) eCheckedOut[k] = entry[k];
+      checkedOut.push(eCheckedOut);
       if (rd < today) {
-        var e2 = {};
-        for (var k in entry) e2[k] = entry[k];
-        e2.daysLate = Math.round((today - rd) / 86400000);
-        overdue.push(e2);
+        var eOverdue = {};
+        for (var k2 in entry) eOverdue[k2] = entry[k2];
+        eOverdue.daysLate = Math.round((today - rd) / 86400000);
+        overdue.push(eOverdue);
+      }
+    }
+    if (status === 'Confirmed' && r[10]) {
+      var pd = r[10] instanceof Date ? new Date(r[10]) : new Date(r[10]);
+      pd.setHours(0, 0, 0, 0);
+      if (pd >= today) {
+        var eUpcoming = {};
+        for (var k3 in entry) eUpcoming[k3] = entry[k3];
+        upcoming.push(eUpcoming);
       }
     }
   }
+
+  upcoming.sort(function(a, b) { return new Date(a.pickupDateISO) - new Date(b.pickupDateISO); });
+  checkedOut.sort(function(a, b) { return new Date(a.returnDateISO) - new Date(b.returnDateISO); });
 
   // Double-booking conflicts (same logic as auditForDoubleBookings)
   var ACTIVE = ['Pending', 'Confirmed', 'Lent Out', 'Added to existing request'];
@@ -129,14 +181,17 @@ function getAdminData(passcode) {
     }
   });
 
-  return { pending: pending, tomorrowPickups: tomorrowPickups, tomorrowReturns: tomorrowReturns, overdue: overdue, conflicts: conflicts };
+  return {
+    pending: pending, tomorrowPickups: tomorrowPickups, tomorrowReturns: tomorrowReturns,
+    overdue: overdue, upcoming: upcoming, checkedOut: checkedOut, conflicts: conflicts
+  };
 }
 
 function adminUpdateStatus(formData) {
   if (!checkAdminPasscode(formData.passcode)) return { success: false, message: 'Invalid passcode.' };
   var row = parseInt(formData.row);
   var newStatus = String(formData.status || '').trim();
-  var validStatuses = ['Confirmed', 'Cancelled', 'Lent Out', 'Returned'];
+  var validStatuses = ['Confirmed', 'Cancelled', 'Lent Out', 'Returned', 'Lost or Damaged'];
   if (!row || row < 2 || validStatuses.indexOf(newStatus) === -1) {
     return { success: false, message: 'Invalid request.' };
   }
@@ -155,12 +210,101 @@ function adminUpdateStatus(formData) {
   }
   return { success: true };
 }
+
+function adminReviseReservation(formData) {
+  if (!checkAdminPasscode(formData.passcode)) return { success: false, message: 'Invalid passcode.' };
+  var row = parseInt(formData.row);
+  if (!row || row < 2) return { success: false, message: 'Invalid request.' };
+
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
+  var data = sheet.getRange(row, 1, 1, 19).getValues()[0];
+  var libraryKey = String(data[0]).trim();
+  var itemName = String(data[7]).trim();
+  var status = String(data[15]).trim();
+  var oldPickupDate = data[10];
+  var oldReturnDate = data[12];
+
+  var newPickupDateStr = String(formData.pickupDate || '').trim();
+  var newPickupTime = String(formData.pickupTime || '').trim();
+  var newReturnDateStr = String(formData.returnDate || '').trim();
+  var newReturnTime = String(formData.returnTime || '').trim();
+  var newQty = parseInt(formData.qty);
+  if (isNaN(newQty) || newQty < 1) newQty = 1;
+
+  if (!newPickupDateStr || !newReturnDateStr) return { success: false, message: 'Pickup and return dates are required.' };
+  var newPickupDate = parseDateString(newPickupDateStr);
+  var newReturnDate = parseDateString(newReturnDateStr);
+  if (newReturnDate <= newPickupDate) return { success: false, message: 'Return date must be after pickup date.' };
+
+  // Re-check availability against every OTHER row (excluding this reservation itself)
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var invRows = ss.getSheetByName(INV_TAB).getDataRange().getValues();
+  var allRsvpRows = sheet.getDataRange().getValues().slice(1);
+  var otherRows = [];
+  for (var i = 0; i < allRsvpRows.length; i++) {
+    if (i + 2 === row) continue;
+    otherRows.push(allRsvpRows[i]);
+  }
+  var availStatus = checkAvailability(itemName, newPickupDate, newReturnDate, newQty, libraryKey, invRows, otherRows);
+  if (availStatus === '✗ Unavailable') {
+    return { success: false, message: 'Not enough availability for the new dates/quantity.' };
+  }
+
+  // If calendar invites were already sent (Confirmed/Lent Out/Added to existing request),
+  // delete the old ones before writing new dates so stale invites don't linger.
+  var hadInvites = (status === 'Confirmed' || status === 'Lent Out' || status === 'Added to existing request');
+  if (hadInvites) {
+    try {
+      var cal = CalendarApp.getDefaultCalendar();
+      var lib = getLibrary(libraryKey);
+      var firstName = String(data[2]).trim().split(' ')[0];
+      var libNameClean = lib.name.replace(/'/g, '');
+      if (oldPickupDate) {
+        var pStart = new Date(oldPickupDate); pStart.setHours(0, 0, 0, 0);
+        var pEnd = new Date(oldPickupDate); pEnd.setHours(23, 59, 59, 999);
+        cal.getEvents(pStart, pEnd, { search: firstName + ' <> ' + libNameClean + ' Pickup' }).forEach(function(ev) { ev.deleteEvent(); });
+      }
+      if (oldReturnDate) {
+        var rStart = new Date(oldReturnDate); rStart.setHours(0, 0, 0, 0);
+        var rEnd = new Date(oldReturnDate); rEnd.setHours(23, 59, 59, 999);
+        cal.getEvents(rStart, rEnd, { search: firstName + ' <> ' + libNameClean + ' Return' }).forEach(function(ev) { ev.deleteEvent(); });
+      }
+    } catch (e) { Logger.log('Calendar cleanup failed during revise: ' + e.message); }
+  }
+
+  // Write the new values
+  sheet.getRange(row, 9).setValue(newQty);          // I: Qty Requested
+  sheet.getRange(row, 11).setValue(newPickupDate);  // K: Pickup Date
+  sheet.getRange(row, 12).setValue(newPickupTime);  // L: Pickup Time
+  sheet.getRange(row, 13).setValue(newReturnDate);  // M: Return Date
+  sheet.getRange(row, 14).setValue(newReturnTime);  // N: Return Time
+  sheet.getRange(row, 15).setValue(availStatus);    // O: Availability Status
+
+  // Recreate calendar invites with the new dates, if they existed before
+  if (hadInvites) {
+    try {
+      var itemObj = { name: itemName, brand: String(data[6] || '').trim(), size: String(data[9] || '').trim(), qty: newQty };
+      var newRowData = sheet.getRange(row, 1, 1, 17).getValues()[0];
+      sendCalendarInvites(newRowData, [itemObj], libraryKey);
+    } catch (e) {
+      return { success: true, warning: 'Reservation updated, but calendar invites failed to regenerate: ' + e.message };
+    }
+  }
+
+  clearAvailabilityCache(libraryKey);
+  return { success: true };
+}
 ```
 
-## Step 2 — Wire it into `doPost`
+---
 
-Open **`Code.js`**, find the existing `doPost` function (near the bottom).
-It currently looks like this:
+## First-time setup (skip if you already did this before)
+
+1. Open the Apps Script editor for **"SF Lending Library — Unified"**.
+2. Click **"+"** next to **Files** → **Script** → name it `Admin`.
+3. Paste in the complete `Admin.gs` code above, and set your passcode
+   on the first line.
+4. Open `Code.js`, find `doPost`. It currently looks like:
 
 ```javascript
 function doPost(e) {
@@ -177,7 +321,7 @@ function doPost(e) {
     }
 ```
 
-Add two new `else if` branches **before** the final `else`, like this:
+Change it to:
 
 ```javascript
 function doPost(e) {
@@ -193,56 +337,44 @@ function doPost(e) {
       result = getAdminData(body.passcode);
     } else if (action === 'adminUpdateStatus') {
       result = adminUpdateStatus(body);
+    } else if (action === 'adminReviseReservation') {
+      result = adminReviseReservation(body);
     } else {
       result = { success: false, message: 'Unknown action.' };
     }
 ```
 
-Everything else in `doPost` stays exactly the same.
+5. **Deploy → Manage deployments → pencil icon → New version → Deploy.**
 
-## Step 3 — Deploy
+---
 
-This is the step people usually forget: pasting code alone doesn't update
-the live site.
+## What each section does now
 
-1. Click **Deploy → Manage deployments**.
-2. Click the pencil/edit icon next to your existing deployment.
-3. Under **Version**, choose **New version**.
-4. Click **Deploy**.
-
-That's it — no need to change the URL, "Execute as," or "Who has access"
-settings; those stay exactly as they are.
-
-## Test it
-
-Go to https://sflendinglibrary.org/admin/ and enter the passcode you set
-in Step 1. If your Sheet currently has no pending/overdue/conflicting
-reservations, everything will just show "you're caught up" / "nothing
-scheduled" — that's correct, not a bug. To see it in action, you could
-temporarily change one reservation's status to "Pending" in the Sheet and
-refresh the dashboard.
-
-## What each dashboard section does
-
-| Section | Shows | Action button |
+| Section | Shows | Actions |
 |---|---|---|
-| New requests | Status = Pending | Confirm / Decline |
-| Tomorrow's pickups | Confirmed, pickup date = tomorrow | Mark Lent Out |
-| Tomorrow's returns | Lent Out, return date = tomorrow | Mark Returned |
-| Overdue returns | Lent Out, return date < today | Mark Returned |
-| Double-booking conflicts | More booked than you have in stock | (informational only — resolve manually in the Sheet) |
+| New requests | Status = Pending | Confirm, Decline, Revise |
+| Upcoming reservations | Confirmed, pickup date today or later | Mark Lent Out, Revise, Cancel |
+| Tomorrow's pickups | Confirmed, pickup date = tomorrow | Mark Lent Out, Revise, Cancel |
+| Tomorrow's returns | Lent Out, return date = tomorrow | Mark Returned, Revise |
+| Currently checked out | All Lent Out items, sorted by return date | Mark Returned, Lost/Damaged, Revise |
+| Overdue returns | Checked out, return date in the past | Mark Returned, Revise |
+| Double-booking conflicts | More booked than in stock | Informational only |
 
-Marking something "Returned" also auto-fills the **Actual Return Date**
-and **# of Days Returned Late** columns in the Sheet, so you don't have
-to enter those by hand afterward.
+**Revise** opens an inline editor for pickup date/time, return date/time,
+and quantity. It re-checks availability against every other booking
+before saving, and — if the reservation already had calendar invites
+sent — deletes the old invites and creates fresh ones with the new
+dates, so the borrower's calendar always matches what's in the Sheet.
 
-## A note on the passcode's security level
+**Revise is scoped to dates/time/qty only** — it doesn't let you change
+which item, library, or borrower a reservation is for. Those are rare
+enough edits that doing them directly in the Sheet stays simplest.
 
-This is intentionally simple, matching what you asked for: a single
-shared passcode, not a real login system. It keeps the dashboard off
-Google search results and away from casual visitors, but it's not
-airtight — anyone who has both the URL and the passcode can see borrower
-names, emails, and phone numbers. Don't share the passcode outside your
-household, and if you ever suspect it's leaked, just change
-`ADMIN_PASSCODE` in Admin.gs and redeploy (Step 3) to invalidate it
-immediately.
+## Known limitation (inherited, not new)
+
+Cancelling or declining a reservation that already had calendar invites
+sent does **not** delete those invites — this was already true before
+today's changes (the original system never had invite-cleanup-on-cancel
+logic). If a borrower cancels after being confirmed, you may want to
+manually delete their calendar events. Happy to add automatic cleanup
+for this too if it becomes annoying — just ask.

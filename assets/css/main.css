@@ -18,6 +18,7 @@
   --cat-puzzles: #2F7A4F;
   --font-stamp: 'Special Elite', 'American Typewriter', 'Courier New', monospace;
   --font-body: 'Nunito', sans-serif;
+  --font-type-body: 'Courier Prime', 'Courier New', monospace;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -169,11 +170,11 @@ header p { font-size: 0.95rem; opacity: 0.88; }
 .faq-group { margin-bottom: 1.75rem; }
 .faq-group-title { font-family: var(--font-stamp); font-size: 0.8rem; font-weight: 400; color: var(--ink); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 1.1rem; padding-bottom: 0.6rem; border-bottom: 1px dashed var(--line); }
 .faq-item { border-bottom: 1px solid var(--line-soft); }
-.faq-question { width: 100%; background: none; border: none; text-align: left; font-family: var(--font-body); font-size: 0.92rem; font-weight: 700; color: var(--ink); padding: 0.85rem 0; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.faq-question { width: 100%; background: none; border: none; text-align: left; font-family: var(--font-type-body); font-size: 0.86rem; font-weight: 700; color: var(--ink); padding: 0.85rem 0; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
 .faq-question:hover { color: var(--accent); }
 .faq-arrow { font-size: 0.7rem; color: var(--placeholder); transition: transform 0.2s; flex-shrink: 0; }
 .faq-question.open .faq-arrow { transform: rotate(180deg); }
-.faq-answer { display: none; padding-bottom: 1rem; font-size: 0.87rem; color: var(--text-secondary); line-height: 1.7; }
+.faq-answer { display: none; padding-bottom: 1rem; font-family: var(--font-type-body); font-size: 0.8rem; color: var(--text-secondary); line-height: 1.75; }
 .faq-answer.open { display: block; }
 .faq-answer ul { margin: 0.4rem 0 0 1.1rem; display: flex; flex-direction: column; gap: 0.15rem; }
 .faq-answer a { color: var(--accent); font-weight: 700; }

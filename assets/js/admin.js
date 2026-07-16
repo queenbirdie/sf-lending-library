@@ -30,11 +30,14 @@ function unlockAdmin() {
   });
 }
 
-function loadAdminData(cb) {
-  document.getElementById('adminLoading').style.display = 'block';
-  document.getElementById('adminContent').style.display = 'none';
+function loadAdminData(cb, opts) {
+  var silent = opts && opts.silent;
+  if (!silent) {
+    document.getElementById('adminLoading').style.display = 'block';
+    document.getElementById('adminContent').style.display = 'none';
+  }
   apiPost({ action: 'admin', passcode: adminPasscode }, function(data) {
-    document.getElementById('adminLoading').style.display = 'none';
+    if (!silent) document.getElementById('adminLoading').style.display = 'none';
     var ok = data && Array.isArray(data.pending);
     if (!ok) { if (cb) cb(false); return; }
     document.getElementById('adminContent').style.display = 'block';
@@ -50,7 +53,7 @@ function loadAdminData(cb) {
     filterAdminSearch(document.getElementById('adminSearch').value);
     if (cb) cb(true);
   }, function() {
-    document.getElementById('adminLoading').style.display = 'none';
+    if (!silent) document.getElementById('adminLoading').style.display = 'none';
     if (cb) cb(false);
   });
 }
@@ -93,10 +96,20 @@ function availabilityBadgeHtml(status) {
   return '<span class="badge ' + cls + '">' + esc(status) + '</span>';
 }
 
+function durationDays(e) {
+  if (!e.pickupDateISO || !e.returnDateISO) return null;
+  var p = new Date(e.pickupDateISO + 'T00:00:00');
+  var r = new Date(e.returnDateISO + 'T00:00:00');
+  var days = Math.round((r - p) / 86400000);
+  return isNaN(days) || days < 0 ? null : days;
+}
+
 function metaHtml(e, showLate) {
   var lateLine = (showLate && e.daysLate) ? '<br><span class="admin-card-late">' + e.daysLate + ' day' + (e.daysLate === 1 ? '' : 's') + ' late</span>' : '';
+  var days = durationDays(e);
+  var durationLabel = days === null ? '' : ' (' + days + ' day' + (days === 1 ? '' : 's') + ')';
   return '<div class="admin-card-detail">' +
-    esc(e.pickupDate) + (e.pickupTime ? ' \xb7 ' + esc(e.pickupTime) : '') + ' &#8594; ' + esc(e.returnDate) + (e.returnTime ? ' \xb7 ' + esc(e.returnTime) : '') + lateLine + '<br>' +
+    esc(e.pickupDate) + (e.pickupTime ? ' \xb7 ' + esc(e.pickupTime) : '') + ' &#8594; ' + esc(e.returnDate) + (e.returnTime ? ' \xb7 ' + esc(e.returnTime) : '') + durationLabel + lateLine + '<br>' +
     '<a href="tel:' + esc(e.phone) + '">' + esc(e.phone) + '</a> &middot; <a href="mailto:' + esc(e.email) + '">' + esc(e.email) + '</a></div>';
 }
 
@@ -227,7 +240,7 @@ function saveRevise(row) {
   if (!pickupDate || !returnDate) { errEl.textContent = 'Pickup and return dates are required.'; errEl.style.display = 'block'; return; }
   apiPost({ action: 'adminReviseReservation', passcode: adminPasscode, row: row, pickupDate: pickupDate, pickupTime: pickupTime, returnDate: returnDate, returnTime: returnTime, qty: qty }, function(result) {
     if (result.success) {
-      loadAdminData();
+      loadAdminData(null, { silent: true });
     } else {
       errEl.textContent = result.message || 'Something went wrong.';
       errEl.style.display = 'block';
@@ -297,7 +310,7 @@ function updateStatus(row, status, btn) {
   btn.textContent = 'Saving...';
   apiPost({ action: 'adminUpdateStatus', passcode: adminPasscode, row: row, status: status }, function(result) {
     if (result.success) {
-      loadAdminData();
+      loadAdminData(null, { silent: true });
     } else {
       btn.disabled = false;
       alert(result.message || 'Something went wrong.');
@@ -313,7 +326,7 @@ function bulkUpdateStatus(rows, status, btn, label) {
   btn.textContent = 'Saving...';
   apiPost({ action: 'adminBatchUpdateStatus', passcode: adminPasscode, rows: rows, status: status }, function(result) {
     if (result.success) {
-      loadAdminData();
+      loadAdminData(null, { silent: true });
     } else {
       btn.disabled = false;
       btn.textContent = label + ' (' + rows.length + ')';

@@ -56,7 +56,7 @@ header p { font-size: 0.95rem; opacity: 0.88; }
 .item-card.selected .check-mark { display: flex; }
 .item-name { font-weight: 700; font-size: 0.92rem; line-height: 1.35; padding-right: 20px; }
 .item-meta { font-size: 0.78rem; color: var(--text-tertiary); font-weight: 600; line-height: 1.4; }
-.badge { display: inline-block; font-family: var(--font-stamp); font-size: 0.7rem; font-weight: 400; padding: 0.2rem 0.55rem; border-radius: 3px; border: 1.5px solid; align-self: flex-start; letter-spacing: 0.02em; }
+.badge { display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-stamp); font-size: 0.7rem; font-weight: 400; padding: 0.25rem 0.55rem 0.1rem; border-radius: 3px; border: 1.5px solid; align-self: flex-start; letter-spacing: 0.02em; line-height: 1; }
 .badge-available { background: #E4F5E1; color: #2A7040; border-color: #2A7040; }
 .badge-out { background: var(--soft-bg); color: var(--text-tertiary); border-color: var(--line); }
 .badge-tight { background: #FEF3CD; color: #856404; border-color: #856404; }
@@ -243,7 +243,7 @@ header p { font-size: 0.95rem; opacity: 0.88; }
 .admin-chevron { font-size: 0.7rem; color: var(--placeholder); flex-shrink: 0; }
 .admin-section.collapsed .admin-section-header { border-bottom-color: var(--line-soft); margin-bottom: 0; }
 .admin-section-title { font-size: 0.95rem; font-weight: 800; color: var(--ink); display: flex; align-items: center; gap: 0.5rem; }
-.admin-count-badge { font-family: var(--font-stamp); background: var(--accent); color: white; font-size: 0.72rem; font-weight: 400; padding: 0.1rem 0.55rem; border-radius: 3px; min-width: 1.2rem; text-align: center; }
+.admin-count-badge { font-family: var(--font-stamp); background: var(--accent); color: white; font-size: 0.72rem; font-weight: 400; padding: 0.2rem 0.55rem 0.05rem; border-radius: 3px; min-width: 1.2rem; text-align: center; display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
 .admin-count-badge.zero { background: var(--soft-bg); color: var(--text-tertiary); }
 .admin-list { display: flex; flex-direction: column; gap: 0.6rem; }
 .admin-empty { font-size: 0.85rem; color: var(--text-faint); padding: 0.5rem 0; }

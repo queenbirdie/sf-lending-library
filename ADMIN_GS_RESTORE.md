@@ -179,13 +179,14 @@ function getAdminData(passcode) {
   var conflicts = [], seenItems = {};
   active.forEach(function(x) {
     var itemName = String(x.r[7]).trim();
-    var libraryKey = String(x.r[0]).trim();
-    var itemKey = libraryKey + '|' + itemName;
+    var rowLibraryKey = String(x.r[0]).trim();
+    var itemLibs = getItemLibraries(itemName, rowLibraryKey, invRows);
+    var itemKey = itemLibs.slice().sort().join(',') + '|' + itemName;
     if (seenItems[itemKey]) return;
     seenItems[itemKey] = true;
-    var totalQty = getItemQty(itemName, libraryKey, invRows);
+    var totalQty = getItemQty(itemName, rowLibraryKey, invRows);
     var itemRows = active.filter(function(y) {
-      return String(y.r[7]).trim() === itemName && String(y.r[0]).trim() === libraryKey;
+      return String(y.r[7]).trim() === itemName && itemLibs.indexOf(String(y.r[0]).trim()) !== -1;
     });
     var dates = [];
     itemRows.forEach(function(y) {
@@ -207,7 +208,7 @@ function getAdminData(passcode) {
     });
     if (maxQty > totalQty) {
       conflicts.push({
-        item: itemName, library: libraryKey, totalQty: totalQty, bookedQty: maxQty,
+        item: itemName, library: itemLibs.join(' + '), totalQty: totalQty, bookedQty: maxQty,
         worstDate: worstDate ? fmt(worstDate) : null,
         rows: worstRows.map(function(y) { return { row: y.rowNum, name: String(y.r[2]).trim(), status: String(y.r[15]).trim() }; })
       });

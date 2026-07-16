@@ -32,6 +32,7 @@ const LIBRARIES = [
   { key: 'party',     tabAbbr: 'PS', shortName: 'Party Supplies',    name: 'Party Supplies Lending Library',       address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1E8NsGt5WkPcdO1uIovOVZI0LkB06im_4' },
   { key: 'costumes',  tabAbbr: 'KC', shortName: 'Kids\' Costumes',   name: 'Kids\' Costumes Lending Library',      address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1UyprtKkcowekEbnRUvVrGH9oYaMKjuOc' },
   { key: 'puzzles',   tabAbbr: 'PG', shortName: 'Puzzles & Games',   name: 'Puzzles & Games Lending Library',      address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1--vhQGQEc9WnuKNkPM9YSdrsgd0Pundy' },
+  { key: 'yoto',      tabAbbr: 'YT', shortName: 'Yoto',              name: 'Yoto Lending Library',                 address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1YquLATJiVLGYCQtDWjpOylH79mC8nBnH' },
 ];
 
 function getLibrary(key) {
@@ -72,10 +73,34 @@ function parseDateString(str) {
   return d;
 }
 
+// Cross-listing: an inventory row's Library cell can hold more than one
+// library key, comma-separated (e.g. "kid-gear, puzzles"), for a single
+// physical item that should show up — and share one availability pool —
+// in more than one catalog.
+function itemLibraries(rawLibraryField) {
+  return String(rawLibraryField || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+}
+
+function libraryMatches(rawLibraryField, libraryKey) {
+  return itemLibraries(rawLibraryField).indexOf(libraryKey) !== -1;
+}
+
+// Full set of library keys a given item is listed under (its cross-listing
+// group), looked up via any one of those keys. Falls back to just the
+// key passed in if the item isn't found.
+function getItemLibraries(itemName, libraryKey, invRows) {
+  for (var i = 1; i < invRows.length; i++) {
+    if (String(invRows[i][COL_ITEM]).trim() === itemName && libraryMatches(invRows[i][COL_LIBRARY], libraryKey)) {
+      return itemLibraries(invRows[i][COL_LIBRARY]);
+    }
+  }
+  return [libraryKey];
+}
+
 function getItemQty(itemName, libraryKey, invRows) {
   var rows = invRows || SpreadsheetApp.getActiveSpreadsheet().getSheetByName(INV_TAB).getDataRange().getValues();
   for (var i = 1; i < rows.length; i++) {
-    if (String(rows[i][COL_ITEM]).trim() === itemName && String(rows[i][COL_LIBRARY]).trim() === libraryKey) {
+    if (String(rows[i][COL_ITEM]).trim() === itemName && libraryMatches(rows[i][COL_LIBRARY], libraryKey)) {
       var q = parseInt(rows[i][COL_QTY]);
       return isNaN(q) || q < 1 ? 1 : q;
     }
@@ -85,7 +110,7 @@ function getItemQty(itemName, libraryKey, invRows) {
 
 function getItemId(itemName, libraryKey, invRows) {
   for (var i = 1; i < invRows.length; i++) {
-    if (String(invRows[i][COL_ITEM]).trim() === itemName && String(invRows[i][COL_LIBRARY]).trim() === libraryKey) {
+    if (String(invRows[i][COL_ITEM]).trim() === itemName && libraryMatches(invRows[i][COL_LIBRARY], libraryKey)) {
       return String(invRows[i][COL_ITEM_ID]).trim();
     }
   }
@@ -94,7 +119,7 @@ function getItemId(itemName, libraryKey, invRows) {
 
 function getItemBrand(itemName, libraryKey, invRows) {
   for (var i = 1; i < invRows.length; i++) {
-    if (String(invRows[i][COL_ITEM]).trim() === itemName && String(invRows[i][COL_LIBRARY]).trim() === libraryKey) {
+    if (String(invRows[i][COL_ITEM]).trim() === itemName && libraryMatches(invRows[i][COL_LIBRARY], libraryKey)) {
       return String(invRows[i][COL_BRAND] || '').trim();
     }
   }
@@ -103,7 +128,7 @@ function getItemBrand(itemName, libraryKey, invRows) {
 
 function getItemSize(itemName, libraryKey, invRows) {
   for (var i = 1; i < invRows.length; i++) {
-    if (String(invRows[i][COL_ITEM]).trim() === itemName && String(invRows[i][COL_LIBRARY]).trim() === libraryKey) {
+    if (String(invRows[i][COL_ITEM]).trim() === itemName && libraryMatches(invRows[i][COL_LIBRARY], libraryKey)) {
       return String(invRows[i][COL_SIZE] || '').trim();
     }
   }
@@ -112,7 +137,7 @@ function getItemSize(itemName, libraryKey, invRows) {
 
 function getItemImageUrl(itemName, libraryKey, invRows) {
   for (var i = 1; i < invRows.length; i++) {
-    if (String(invRows[i][COL_ITEM]).trim() === itemName && String(invRows[i][COL_LIBRARY]).trim() === libraryKey) {
+    if (String(invRows[i][COL_ITEM]).trim() === itemName && libraryMatches(invRows[i][COL_LIBRARY], libraryKey)) {
       return normalizeDriveUrl(String(invRows[i][COL_IMAGE_URL] || '').trim());
     }
   }
@@ -274,6 +299,7 @@ function isBlackoutDate(date, blackoutDates) {
 function checkAvailability(item, newPickup, newReturn, requestedQty, libraryKey, invRows, rsvpRows) {
   requestedQty = parseInt(requestedQty) || 1;
   var totalQty = getItemQty(item, libraryKey, invRows);
+  var itemLibs = getItemLibraries(item, libraryKey, invRows);
   var rows = rsvpRows || SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB).getDataRange().getValues().slice(1);
   var np  = new Date(newPickup); np.setHours(0, 0, 0, 0);
   var nr  = new Date(newReturn); nr.setHours(0, 0, 0, 0);
@@ -284,7 +310,7 @@ function checkAvailability(item, newPickup, newReturn, requestedQty, libraryKey,
     var rowItem    = String(r[7]).trim();
     var rowLibrary = String(r[0]).trim();
     var status     = String(r[15]).trim();
-    if (rowItem !== item || rowLibrary !== libraryKey || status === 'Cancelled' || status === 'Returned' || status === 'Lost or Damaged') return;
+    if (rowItem !== item || itemLibs.indexOf(rowLibrary) === -1 || status === 'Cancelled' || status === 'Returned' || status === 'Lost or Damaged') return;
     var ep  = new Date(r[10]);  ep.setHours(0, 0, 0, 0);
     var er  = new Date(r[12]); er.setHours(0, 0, 0, 0);
     var qty = (r[8] && !isNaN(parseInt(r[8]))) ? parseInt(r[8]) : 1;
@@ -1023,6 +1049,17 @@ function getAvailabilityData(libraryKey) {
   var rsvpData  = rsvpSheet.getDataRange().getValues();
   var lib       = getLibrary(libraryKey);
   var today     = new Date(); today.setHours(0, 0, 0, 0);
+  // Item names relevant to this library (directly listed or cross-listed
+  // via a comma-separated Library cell), mapped to their full library set
+  // so a booking made through any of those libraries pools correctly.
+  var itemLibMap = {};
+  for (var j0 = 1; j0 < invData.length; j0++) {
+    var iname0 = String(invData[j0][COL_ITEM]).trim();
+    if (!iname0) continue;
+    var libs0 = itemLibraries(invData[j0][COL_LIBRARY]);
+    if (libs0.indexOf(libraryKey) !== -1) itemLibMap[iname0] = libs0;
+  }
+
   var reservations = [], activeRsvps = {}, lentOut = {};
   for (var i = 1; i < rsvpData.length; i++) {
     var row        = rsvpData[i];
@@ -1032,7 +1069,8 @@ function getAvailabilityData(libraryKey) {
     var status     = String(row[15]).trim();   // P: Status
     var rowLib     = String(row[0]).trim();    // A: Library
     var qty        = (row[8] && !isNaN(parseInt(row[8]))) ? parseInt(row[8]) : 1;    // I: Qty
-    if (rowLib !== libraryKey) continue;
+    var itemLibs   = itemLibMap[itemName];
+    if (!itemLibs || itemLibs.indexOf(rowLib) === -1) continue;
     if (['Confirmed', 'Lent Out', 'Pending', 'Added to existing request'].indexOf(status) === -1) continue;
     if (!itemName || !pickupDate || !returnDate) continue;
     var pd = new Date(pickupDate); pd.setHours(0, 0, 0, 0);
@@ -1045,8 +1083,7 @@ function getAvailabilityData(libraryKey) {
   var items = [];
   for (var j = 1; j < invData.length; j++) {
     var irow    = invData[j];
-    var rowLib2 = String(irow[COL_LIBRARY]).trim();
-    if (rowLib2 !== libraryKey) continue;
+    if (itemLibraries(irow[COL_LIBRARY]).indexOf(libraryKey) === -1) continue;
     var iname      = String(irow[COL_ITEM]).trim();
     var availFlag  = String(irow[COL_CURRENTLY_HAVE]).trim().toUpperCase();
     var category   = String(irow[COL_CATEGORY]).trim();

@@ -71,6 +71,39 @@ function getAdminData(passcode) {
 
   var pending = [], tomorrowPickups = [], tomorrowReturns = [], todayReturns = [], overdue = [], upcoming = [], checkedOut = [], pastReservations = [];
   var PAST_STATUSES = ['Returned', 'Cancelled', 'Lost or Damaged'];
+  var ARCHIVE_TAB = 'reservations archive';
+
+  function collectPastFromSheet(sheetName) {
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return [];
+    var sheetRows = sheet.getDataRange().getValues();
+    var out = [];
+    for (var i = 1; i < sheetRows.length; i++) {
+      var r = sheetRows[i];
+      var rowNum = i + 1;
+      var status = String(r[15]).trim();
+      if (PAST_STATUSES.indexOf(status) === -1) continue;
+      out.push({
+        row: rowNum,
+        status: status,
+        library: String(r[0]).trim(),
+        groupKey: r[1] ? String((r[1] instanceof Date ? r[1] : new Date(r[1])).getTime()) : (sheetName + '-row-' + rowNum),
+        sortKey: r[1] ? (r[1] instanceof Date ? r[1].getTime() : new Date(r[1]).getTime()) : 0,
+        name: String(r[2]).trim(),
+        email: String(r[3]).trim(),
+        phone: String(r[4]).trim(),
+        item: String(r[7]).trim(),
+        brand: String(r[6] || '').trim(),
+        size: String(r[9] || '').trim(),
+        qty: (r[8] && !isNaN(parseInt(r[8]))) ? parseInt(r[8]) : 1,
+        availabilityStatus: String(r[14] || '').trim(),
+        imageUrl: getItemImageUrl(String(r[7]).trim(), String(r[0]).trim(), invRows),
+        pickupDate: fmt(r[10]), pickupDateISO: fmtISO(r[10]), pickupTime: String(r[11] || '').trim(),
+        returnDate: fmt(r[12]), returnDateISO: fmtISO(r[12]), returnTime: String(r[13] || '').trim()
+      });
+    }
+    return out;
+  }
 
   for (var i = 1; i < rows.length; i++) {
     var r = rows[i];
@@ -81,6 +114,7 @@ function getAdminData(passcode) {
       status: status,
       library: String(r[0]).trim(),
       groupKey: r[1] ? String((r[1] instanceof Date ? r[1] : new Date(r[1])).getTime()) : ('row-' + rowNum),
+      sortKey: r[1] ? (r[1] instanceof Date ? r[1].getTime() : new Date(r[1]).getTime()) : 0,
       name: String(r[2]).trim(),
       email: String(r[3]).trim(),
       phone: String(r[4]).trim(),
@@ -132,7 +166,8 @@ function getAdminData(passcode) {
 
   upcoming.sort(function(a, b) { return new Date(a.pickupDateISO) - new Date(b.pickupDateISO); });
   checkedOut.sort(function(a, b) { return new Date(a.returnDateISO) - new Date(b.returnDateISO); });
-  pastReservations.sort(function(a, b) { return b.row - a.row; });
+  pastReservations = pastReservations.concat(collectPastFromSheet(ARCHIVE_TAB));
+  pastReservations.sort(function(a, b) { return b.sortKey - a.sortKey; });
   pastReservations = pastReservations.slice(0, 150);
 
   // Double-booking conflicts (same logic as auditForDoubleBookings)

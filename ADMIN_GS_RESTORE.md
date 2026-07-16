@@ -69,7 +69,8 @@ function getAdminData(passcode) {
     return dt.getTime() === ref.getTime();
   }
 
-  var pending = [], tomorrowPickups = [], tomorrowReturns = [], todayReturns = [], overdue = [], upcoming = [], checkedOut = [];
+  var pending = [], tomorrowPickups = [], tomorrowReturns = [], todayReturns = [], overdue = [], upcoming = [], checkedOut = [], pastReservations = [];
+  var PAST_STATUSES = ['Returned', 'Cancelled', 'Lost or Damaged'];
 
   for (var i = 1; i < rows.length; i++) {
     var r = rows[i];
@@ -94,6 +95,7 @@ function getAdminData(passcode) {
     };
 
     if (status === 'Pending') pending.push(entry);
+    if (PAST_STATUSES.indexOf(status) !== -1) pastReservations.push(entry);
 
     if ((status === 'Confirmed' || status === 'Added to existing request') && r[10] && isSameDay(r[10], tomorrow)) {
       tomorrowPickups.push(entry);
@@ -130,6 +132,8 @@ function getAdminData(passcode) {
 
   upcoming.sort(function(a, b) { return new Date(a.pickupDateISO) - new Date(b.pickupDateISO); });
   checkedOut.sort(function(a, b) { return new Date(a.returnDateISO) - new Date(b.returnDateISO); });
+  pastReservations.sort(function(a, b) { return b.row - a.row; });
+  pastReservations = pastReservations.slice(0, 150);
 
   // Double-booking conflicts (same logic as auditForDoubleBookings)
   var ACTIVE = ['Pending', 'Confirmed', 'Lent Out', 'Added to existing request'];
@@ -177,7 +181,7 @@ function getAdminData(passcode) {
 
   return {
     pending: pending, tomorrowPickups: tomorrowPickups, tomorrowReturns: tomorrowReturns, todayReturns: todayReturns,
-    overdue: overdue, upcoming: upcoming, checkedOut: checkedOut, conflicts: conflicts
+    overdue: overdue, upcoming: upcoming, checkedOut: checkedOut, conflicts: conflicts, pastReservations: pastReservations
   };
 }
 

@@ -1,7 +1,9 @@
 var adminPasscode = sessionStorage.getItem('sfll_admin_passcode') || '';
 var TIME_WINDOWS = ['8 - 9am', '9 - 10am', '10 - 11am', '11am - 12pm', '12 - 1pm', '1 - 2pm', '2 - 3pm', '3 - 4pm', '4 - 5pm', '5 - 6pm', '6 - 7pm', '7 - 8pm'];
-var SECTION_KEYS = ['pending', 'todayReturns', 'upcoming', 'pickups', 'returns', 'checkedOut', 'overdue', 'conflicts'];
+var SECTION_KEYS = ['pending', 'todayReturns', 'upcoming', 'pickups', 'returns', 'checkedOut', 'overdue', 'conflicts', 'pastReservations'];
+var DEFAULT_COLLAPSED_KEYS = { pastReservations: true };
 var sectionCollapseOverride = {};
+var isolatedSection = null;
 
 if (adminPasscode) {
   document.getElementById('lockScreen').style.display = 'none';
@@ -42,13 +44,14 @@ function loadAdminData(cb, opts) {
     if (!ok) { if (cb) cb(false); return; }
     document.getElementById('adminContent').style.display = 'block';
     renderGroupedSection('pendingList', 'pendingCount', data.pending, ['confirm', 'decline', 'revise'], { label: 'Confirm all', status: 'Confirmed', hoistMeta: true });
-    renderGroupedSection('todayReturnsList', 'todayReturnsCount', sortByTime(data.todayReturns || []), ['markReturned', 'lostDamaged', 'revise'], { label: 'Mark all returned', status: 'Returned', hoistMeta: false });
-    renderGroupedSection('upcomingList', 'upcomingCount', data.upcoming || [], ['markLentOut', 'revise', 'cancel'], { label: 'Mark all lent out', status: 'Lent Out', hoistMeta: false });
-    renderGroupedSection('pickupsList', 'pickupsCount', data.tomorrowPickups || [], ['markLentOut', 'revise', 'cancel'], { label: 'Mark all lent out', status: 'Lent Out', hoistMeta: false });
-    renderSection('returnsList', 'returnsCount', data.tomorrowReturns || [], ['markReturned', 'revise']);
-    renderSection('checkedOutList', 'checkedOutCount', data.checkedOut || [], ['markReturned', 'lostDamaged', 'revise']);
+    renderGroupedSection('todayReturnsList', 'todayReturnsCount', sortByDateTime(data.todayReturns || [], 'returnDateISO', 'returnTime'), ['markReturned', 'lostDamaged', 'revise'], { label: 'Mark all returned', status: 'Returned', hoistMeta: false });
+    renderGroupedSection('upcomingList', 'upcomingCount', sortByDateTime(data.upcoming || [], 'pickupDateISO', 'pickupTime'), ['markLentOut', 'revise', 'cancel'], { label: 'Mark all lent out', status: 'Lent Out', hoistMeta: false });
+    renderGroupedSection('pickupsList', 'pickupsCount', sortByDateTime(data.tomorrowPickups || [], 'pickupDateISO', 'pickupTime'), ['markLentOut', 'revise', 'cancel'], { label: 'Mark all lent out', status: 'Lent Out', hoistMeta: false });
+    renderSection('returnsList', 'returnsCount', sortByDateTime(data.tomorrowReturns || [], 'returnDateISO', 'returnTime'), ['markReturned', 'revise']);
+    renderSection('checkedOutList', 'checkedOutCount', sortByDateTime(data.checkedOut || [], 'returnDateISO', 'returnTime'), ['markReturned', 'lostDamaged', 'revise']);
     renderSection('overdueList', 'overdueCount', data.overdue || [], ['markReturned', 'revise'], true);
     renderConflicts(data.conflicts || []);
+    renderPastReservations('pastReservationsList', 'pastReservationsCount', data.pastReservations || []);
     SECTION_KEYS.forEach(applySectionState);
     filterAdminSearch(document.getElementById('adminSearch').value);
     if (cb) cb(true);
@@ -58,9 +61,11 @@ function loadAdminData(cb, opts) {
   });
 }
 
-function sortByTime(items) {
+function sortByDateTime(items, dateField, timeField) {
   return items.slice().sort(function(a, b) {
-    var ia = TIME_WINDOWS.indexOf(a.returnTime), ib = TIME_WINDOWS.indexOf(b.returnTime);
+    var da = a[dateField] || '', db = b[dateField] || '';
+    if (da !== db) return da < db ? -1 : 1;
+    var ia = TIME_WINDOWS.indexOf(a[timeField]), ib = TIME_WINDOWS.indexOf(b[timeField]);
     if (ia === -1) ia = TIME_WINDOWS.length;
     if (ib === -1) ib = TIME_WINDOWS.length;
     return ia - ib;
@@ -81,12 +86,12 @@ function searchTextFor(e) {
   return [e.name, e.email, e.phone, e.item, e.brand, e.library].filter(Boolean).join(' ').toLowerCase();
 }
 
-function itemLineHtml(e) {
+function itemLineHtml(e, showAvailability) {
   var details = [e.brand, e.size].filter(Boolean).join(', ');
   var label = esc(e.item) + (details ? ' (' + esc(details) + ')' : '');
   var qtyBadge = e.qty > 1 ? ' <span class="admin-qty-badge">\xd7' + e.qty + '</span>' : '';
   var thumb = e.imageUrl ? '<img class="admin-card-thumb" src="' + esc(e.imageUrl) + '" alt="" loading="lazy" onerror="this.remove()">' : '<div class="admin-card-thumb admin-card-thumb-empty"></div>';
-  var avail = availabilityBadgeHtml(e.availabilityStatus);
+  var avail = showAvailability === false ? '' : availabilityBadgeHtml(e.availabilityStatus);
   return '<div class="admin-item-row">' + thumb + '<div class="admin-item-text">' + label + qtyBadge + (avail ? '<br>' + avail : '') + '</div></div>';
 }
 
@@ -94,6 +99,12 @@ function availabilityBadgeHtml(status) {
   if (!status) return '';
   var cls = status.indexOf('Unavailable') !== -1 ? 'badge-out' : status.indexOf('Tight') !== -1 ? 'badge-tight' : status.indexOf('Available') !== -1 ? 'badge-available' : 'badge-neutral';
   return '<span class="badge ' + cls + '">' + esc(status) + '</span>';
+}
+
+function pastStatusBadgeHtml(status) {
+  var label = status === 'Returned' ? 'Completed' : status;
+  var cls = status === 'Returned' ? 'badge-available' : status === 'Cancelled' ? 'badge-neutral' : 'badge-lost';
+  return '<span class="badge ' + cls + '">' + esc(label) + '</span>';
 }
 
 function durationDays(e) {
@@ -137,7 +148,7 @@ function setSectionCollapsed(key, collapsed) {
 }
 
 function applySectionState(key) {
-  var collapsed = sectionCollapseOverride.hasOwnProperty(key) ? sectionCollapseOverride[key] : (sectionCounts[key] || 0) === 0;
+  var collapsed = sectionCollapseOverride.hasOwnProperty(key) ? sectionCollapseOverride[key] : (DEFAULT_COLLAPSED_KEYS[key] || (sectionCounts[key] || 0) === 0);
   setSectionCollapsed(key, collapsed);
 }
 
@@ -150,11 +161,41 @@ function toggleSection(key) {
 
 function jumpToSection(key, e) {
   if (e) e.preventDefault();
+  if (isolatedSection === key) {
+    clearIsolation();
+  } else {
+    isolateSection(key);
+  }
+  return false;
+}
+
+function isolateSection(key) {
+  isolatedSection = key;
+  SECTION_KEYS.forEach(function(k) {
+    var sectionEl = document.getElementById('section-' + k);
+    if (sectionEl) sectionEl.style.display = (k === key) ? '' : 'none';
+  });
   sectionCollapseOverride[key] = false;
   setSectionCollapsed(key, false);
-  var el = document.getElementById('section-' + key);
-  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  return false;
+  updateJumpNavActive();
+  window.scrollTo(0, 0);
+}
+
+function clearIsolation() {
+  isolatedSection = null;
+  SECTION_KEYS.forEach(function(k) {
+    var sectionEl = document.getElementById('section-' + k);
+    if (sectionEl) sectionEl.style.display = '';
+  });
+  updateJumpNavActive();
+}
+
+function updateJumpNavActive() {
+  var clearBtn = document.getElementById('clearIsolationBtn');
+  if (clearBtn) clearBtn.style.display = isolatedSection ? '' : 'none';
+  document.querySelectorAll('.admin-jumpnav-pill').forEach(function(pill) {
+    pill.classList.toggle('active', pill.getAttribute('data-section-key') === isolatedSection);
+  });
 }
 
 function filterAdminSearch(query) {
@@ -302,6 +343,20 @@ function renderConflicts(items) {
       '<div class="admin-card-top"><span class="admin-card-name">' + esc(c.item) + '</span><span class="admin-card-lib">' + esc(c.library) + '</span></div>' +
       '<div class="admin-card-detail">' + c.bookedQty + ' booked, only ' + c.totalQty + ' available' + (c.worstDate ? ' around ' + esc(c.worstDate) : '') + '<br>' +
       names + '</div></div>';
+  }).join('');
+}
+
+function renderPastReservations(listId, countId, items) {
+  setCount(countId, items.length);
+  var el = document.getElementById(listId);
+  if (!items.length) { el.innerHTML = '<div class="admin-empty">No past reservations yet.</div>'; return; }
+  el.innerHTML = items.map(function(e) {
+    return '<div class="admin-card" data-search="' + esc(searchTextFor(e)) + '">' +
+      '<div class="admin-card-top"><span class="admin-card-name">' + esc(e.name) + '</span><span class="admin-card-lib">' + esc(e.library) + '</span></div>' +
+      itemLineHtml(e, false) +
+      metaHtml(e, false) +
+      '<div class="admin-card-status-line">' + pastStatusBadgeHtml(e.status) + '</div>' +
+      '</div>';
   }).join('');
 }
 

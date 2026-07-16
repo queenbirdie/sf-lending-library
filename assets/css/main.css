@@ -61,6 +61,7 @@ header p { font-size: 0.95rem; opacity: 0.88; }
 .badge-out { background: var(--soft-bg); color: var(--text-tertiary); border-color: var(--line); }
 .badge-tight { background: #FEF3CD; color: #856404; border-color: #856404; }
 .badge-neutral { background: var(--soft-bg); color: var(--text-tertiary); border-color: var(--line); }
+.badge-lost { background: var(--accent-soft-bg); color: var(--accent); border-color: var(--accent); }
 .next-date { font-size: 0.78rem; color: var(--text-tertiary); }
 .qty-row { display: none; align-items: center; gap: 0.45rem; margin-top: 0.1rem; }
 .item-card.selected .qty-row { display: flex; }
@@ -237,6 +238,7 @@ header p { font-size: 0.95rem; opacity: 0.88; }
 .admin-jumpnav { display: flex; gap: 0.5rem; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.75rem; }
 .admin-jumpnav-pill { flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.35rem; background: var(--card-bg); border-radius: 20px; padding: 0.4rem 0.8rem; font-size: 0.8rem; font-weight: 800; color: var(--text-secondary); text-decoration: none; box-shadow: 0 1px 3px rgba(31,44,61,0.08); white-space: nowrap; }
 .admin-jumpnav-pill:active { background: var(--soft-bg); }
+.admin-jumpnav-pill.active { background: var(--ink); color: white; }
 .admin-jumpnav-pill .admin-count-badge { font-size: 0.68rem; }
 .admin-section { margin-bottom: 2rem; }
 .admin-section-header { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; background: none; border: none; padding: 0.4rem 0; margin-bottom: 0.35rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--line); cursor: pointer; text-align: left; min-height: 44px; }
@@ -254,6 +256,7 @@ header p { font-size: 0.95rem; opacity: 0.88; }
 .admin-card-detail { font-size: 0.85rem; color: var(--text-secondary); line-height: 1.55; }
 .admin-card-detail a { color: var(--accent); text-decoration: none; }
 .admin-card-detail a:hover { text-decoration: underline; }
+.admin-card-status-line { margin-top: 0.5rem; }
 .admin-item-row { display: flex; align-items: flex-start; gap: 0.6rem; margin-bottom: 0.4rem; }
 .admin-card-thumb { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; flex-shrink: 0; background: var(--soft-bg); }
 .admin-card-thumb-empty { visibility: hidden; }

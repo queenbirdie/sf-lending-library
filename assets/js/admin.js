@@ -43,8 +43,8 @@ function loadAdminData(cb, opts) {
     document.getElementById('adminContent').style.display = 'block';
     renderGroupedSection('pendingList', 'pendingCount', data.pending, ['confirm', 'decline', 'revise'], { label: 'Confirm all', status: 'Confirmed', hoistMeta: true });
     renderGroupedSection('todayReturnsList', 'todayReturnsCount', sortByTime(data.todayReturns || []), ['markReturned', 'lostDamaged', 'revise'], { label: 'Mark all returned', status: 'Returned', hoistMeta: false });
-    renderSection('upcomingList', 'upcomingCount', data.upcoming || [], ['markLentOut', 'revise', 'cancel']);
-    renderSection('pickupsList', 'pickupsCount', data.tomorrowPickups || [], ['markLentOut', 'revise', 'cancel']);
+    renderGroupedSection('upcomingList', 'upcomingCount', data.upcoming || [], ['markLentOut', 'revise', 'cancel'], { label: 'Mark all lent out', status: 'Lent Out', hoistMeta: false });
+    renderGroupedSection('pickupsList', 'pickupsCount', data.tomorrowPickups || [], ['markLentOut', 'revise', 'cancel'], { label: 'Mark all lent out', status: 'Lent Out', hoistMeta: false });
     renderSection('returnsList', 'returnsCount', data.tomorrowReturns || [], ['markReturned', 'revise']);
     renderSection('checkedOutList', 'checkedOutCount', data.checkedOut || [], ['markReturned', 'lostDamaged', 'revise']);
     renderSection('overdueList', 'overdueCount', data.overdue || [], ['markReturned', 'revise'], true);

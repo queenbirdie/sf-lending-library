@@ -16,6 +16,7 @@
   --cat-party: #D9622B;
   --cat-costumes: #6B4A8C;
   --cat-puzzles: #2F7A4F;
+  --cat-yoto: #C77D18;
   --font-stamp: 'Special Elite', 'American Typewriter', 'Courier New', monospace;
   --font-body: 'Courier Prime', 'Courier New', monospace;
 }
@@ -131,8 +132,6 @@ header p { font-size: 0.95rem; opacity: 0.88; }
 .lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1.5rem 1rem; }
 .lib-card { background: var(--card-bg); border-radius: 12px; padding: 1.5rem 1.25rem 1.25rem; box-shadow: 0 1px 4px rgba(31,44,61,0.08); border: 1px solid var(--line); position: relative; display: flex; flex-direction: column; gap: 0.6rem; color: inherit; cursor: pointer; transition: box-shadow 0.15s, transform 0.15s; text-decoration: none; }
 .lib-card:hover { box-shadow: 0 6px 20px rgba(31,44,61,0.14); transform: translateY(-2px); }
-.lib-card-holes { position: absolute; top: 12px; right: 16px; display: flex; gap: 6px; }
-.lib-card-hole { width: 6px; height: 6px; border-radius: 50%; background: var(--bg); border: 1px solid var(--c); }
 .lib-card-icon { width: 52px; height: 52px; border-radius: 50%; border: 2px dashed var(--c); color: var(--c); display: flex; align-items: center; justify-content: center; margin-top: 0.35rem; }
 .lib-card-icon svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .lib-card-name { font-size: 1.05rem; font-weight: 700; color: var(--ink); }
@@ -142,6 +141,7 @@ header p { font-size: 0.95rem; opacity: 0.88; }
 .lib-card-party { --c: var(--cat-party); }
 .lib-card-costumes { --c: var(--cat-costumes); }
 .lib-card-puzzles { --c: var(--cat-puzzles); }
+.lib-card-yoto { --c: var(--cat-yoto); }
 
 /* Filters + FAQ */
 .filter-bar { background: var(--soft-bg); border-bottom: 1px solid var(--line); padding: 0.75rem 1rem; }

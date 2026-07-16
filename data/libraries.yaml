@@ -1,28 +1,24 @@
 - key: kid-gear
   name: Kid & Travel Gear
   fullName: Kid & Travel Gear Lending Library
-  tabLabel: Gear
   emoji: "🧳"
   desc: Strollers, carriers, travel gear, and more for families on the go.
   color: "#2E5FA3"
 - key: party
   name: Party Supplies
   fullName: Party Supplies Lending Library
-  tabLabel: Party
   emoji: "🎉"
   desc: Decorations, bubble machines, and supplies for your next celebration.
   color: "#D9622B"
 - key: costumes
   name: Kids' Costumes
   fullName: Kids' Costumes Lending Library
-  tabLabel: Costumes
   emoji: "🎭"
   desc: Dress-up costumes for holidays, playtime, and special occasions.
   color: "#6B4A8C"
 - key: puzzles
   name: Puzzles & Games
   fullName: Puzzles & Games Lending Library
-  tabLabel: Puzzles
   emoji: "🧩"
   desc: Jigsaw puzzles and board games for family game nights.
   color: "#2F7A4F"

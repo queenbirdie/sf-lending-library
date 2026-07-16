@@ -7,7 +7,6 @@
   <div class="lib-grid">
     {{ range site.Data.libraries }}
     <a class="lib-card lib-card-{{ .key }}" href="{{ relURL .key }}/">
-      <div class="lib-card-tab">{{ .tabLabel }}</div>
       <div class="lib-card-holes"><div class="lib-card-hole"></div><div class="lib-card-hole"></div></div>
       <div class="lib-card-icon">{{ partial "lib-icon.html" .key }}</div>
       <div class="lib-card-name">{{ .name }}</div>

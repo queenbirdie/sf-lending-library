@@ -64,6 +64,7 @@ header p { font-size: 0.95rem; opacity: 0.88; }
 .badge-neutral { background: var(--soft-bg); color: var(--text-tertiary); border-color: var(--line); }
 .badge-lost { background: var(--accent-soft-bg); color: var(--accent); border-color: var(--accent); }
 .next-date { font-size: 0.78rem; color: var(--text-tertiary); }
+.next-date-stamp { display: inline-flex; align-items: center; width: fit-content; font-family: var(--font-stamp); font-size: 0.66rem; font-weight: 400; letter-spacing: 0.05em; text-transform: uppercase; color: var(--accent); border: 2px double var(--accent); border-radius: 4px; padding: 0.15rem 0.5rem 0.05rem; transform: rotate(-3deg); opacity: 0.82; }
 .qty-row { display: none; align-items: center; gap: 0.45rem; margin-top: 0.1rem; }
 .item-card.selected .qty-row { display: flex; }
 .qty-row label { font-size: 0.72rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; }
@@ -172,7 +173,7 @@ header p { font-size: 0.95rem; opacity: 0.88; }
 .faq-question:hover { color: var(--accent); }
 .faq-arrow { font-size: 0.7rem; color: var(--placeholder); transition: transform 0.2s; flex-shrink: 0; }
 .faq-question.open .faq-arrow { transform: rotate(180deg); }
-.faq-answer { display: none; padding-bottom: 1rem; font-family: var(--font-body); font-size: 0.8rem; color: var(--text-secondary); line-height: 1.75; }
+.faq-answer { display: none; margin: 0.35rem 0 1rem; font-family: var(--font-body); font-size: 0.8rem; color: var(--text-secondary); line-height: 1.75; background-color: var(--card-bg); background-image: repeating-linear-gradient(to bottom, transparent, transparent calc(1.4rem - 1px), var(--line-soft) calc(1.4rem - 1px), var(--line-soft) 1.4rem); border: 1px solid var(--line-soft); border-radius: 8px; padding: 0.6rem 0.85rem 0.7rem; }
 .faq-answer.open { display: block; }
 .faq-answer ul { margin: 0.4rem 0 0 1.1rem; display: flex; flex-direction: column; gap: 0.15rem; }
 .faq-answer a { color: var(--accent); font-weight: 700; }
@@ -210,6 +211,7 @@ header p { font-size: 0.95rem; opacity: 0.88; }
   .item-meta { font-size: 0.92rem; }
   .badge { font-size: 0.82rem; }
   .next-date { font-size: 0.88rem; }
+  .next-date-stamp { font-size: 0.76rem; padding: 0.2rem 0.6rem 0.08rem; }
   .cart-bar { flex-direction: column; align-items: stretch; gap: 0.5rem; padding: 0.85rem 1rem calc(0.85rem + env(safe-area-inset-bottom, 0px)); }
   .cart-bar > div:last-child { width: 100%; }
   .cart-btn { flex: 1; text-align: center; font-size: 0.88rem; padding: 0.6rem 1rem; }

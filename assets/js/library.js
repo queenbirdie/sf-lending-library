@@ -260,7 +260,7 @@ function renderItems(items, datesKnown) {
       } else {
         html += '<span class="badge badge-out">Checked out</span>';
       }
-      if (datesKnown && !avail && item.nextAvailable) html += '<div class="next-date">Back ' + esc(item.nextAvailable) + '</div>';
+      if (datesKnown && !avail && item.nextAvailable) html += '<div class="next-date-stamp">Back ' + esc(item.nextAvailable) + '</div>';
       if (datesKnown && avail && totalQty > 1) {
         var opts = '';
         for (var q = 1; q <= availQty; q++) {

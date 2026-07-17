@@ -173,7 +173,7 @@ header p { font-size: 0.95rem; opacity: 0.88; }
 .faq-question:hover { color: var(--accent); }
 .faq-arrow { font-size: 0.7rem; color: var(--placeholder); transition: transform 0.2s; flex-shrink: 0; }
 .faq-question.open .faq-arrow { transform: rotate(180deg); }
-.faq-answer { display: none; margin: 0.35rem 0 1rem; font-family: var(--font-body); font-size: 0.8rem; color: var(--text-secondary); line-height: 1.75; background-color: var(--card-bg); background-image: repeating-linear-gradient(to bottom, transparent, transparent calc(1.4rem - 1px), var(--line-soft) calc(1.4rem - 1px), var(--line-soft) 1.4rem); border: 1px solid var(--line-soft); border-radius: 8px; padding: 0.6rem 0.85rem 0.7rem; }
+.faq-answer { display: none; margin: 0.35rem 0 1rem; font-family: var(--font-body); font-size: 0.8rem; color: var(--text-secondary); line-height: 1.75; background-color: var(--card-bg); background-image: repeating-linear-gradient(to bottom, transparent, transparent calc(1.4rem - 1px), var(--line-soft) calc(1.4rem - 1px), var(--line-soft) 1.4rem); background-position: 0 8px; border: 1px solid var(--line-soft); border-radius: 8px; padding: 0.6rem 0.85rem 0.7rem; }
 .faq-answer.open { display: block; }
 .faq-answer ul { margin: 0.4rem 0 0 1.1rem; display: flex; flex-direction: column; gap: 0.15rem; }
 .faq-answer a { color: var(--accent); font-weight: 700; }

@@ -120,6 +120,11 @@ header p { font-size: 0.95rem; opacity: 0.88; }
 .modal-submit-btn:disabled { background: var(--placeholder); cursor: default; }
 .modal-status { text-align: center; padding: 2.5rem 1.5rem; display: flex; flex-direction: column; align-items: center; gap: 0.75rem; }
 .modal-status .status-icon { font-size: 2.5rem; }
+.status-check-icon { width: 46px; height: 46px; border: 2.5px solid var(--accent); border-radius: 6px; color: var(--accent); display: flex; align-items: center; justify-content: center; transform: rotate(-8deg); }
+.status-check-icon svg { width: 24px; height: 24px; }
+.status-stamp { display: inline-flex; flex-direction: column; align-items: center; border: 3px double var(--accent); border-radius: 8px; padding: 0.5rem 1.25rem 0.3rem; transform: rotate(-5deg); }
+.status-stamp-label { font-family: var(--font-stamp); font-size: 0.8rem; letter-spacing: 0.1em; color: var(--accent); }
+.status-stamp-date { font-family: var(--font-stamp); font-size: 0.62rem; color: var(--accent); margin-top: 0.15rem; text-transform: uppercase; }
 .modal-status h3 { font-size: 1.3rem; font-weight: 700; color: var(--ink); }
 .modal-status p { font-size: 0.92rem; color: var(--text-secondary); max-width: 300px; }
 .modal-done-btn { background: var(--ink); color: white; border: none; border-radius: 25px; padding: 0.7rem 1.75rem; font-family: var(--font-body); font-size: 0.95rem; font-weight: 700; cursor: pointer; margin-top: 0.5rem; }

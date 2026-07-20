@@ -407,6 +407,7 @@ function submitForm() {
       document.getElementById('viewLoading').style.display = 'none';
       if (result.success) {
         document.getElementById('viewSuccess').style.display = 'block';
+        document.getElementById('checkoutStampDate').textContent = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         cart = {}; updateCart();
         document.querySelectorAll('.item-card.selected').forEach(function(c) { c.classList.remove('selected'); });
       } else {

@@ -130,16 +130,32 @@ function onDatesChange() {
 
 function checkDateAvailability(itemName, pickupMs, retMs, totalQty) {
   totalQty = totalQty || 1;
-  var bookedQty = 0;
+  var overlapping = [];
   var latestEnd = null;
   for (var i = 0; i < allReservations.length; i++) {
     var r = allReservations[i];
     if (r.item !== itemName) continue;
     if (r.pickup <= retMs && r.ret >= pickupMs) {
-      bookedQty += (r.qty || 1);
+      overlapping.push(r);
       if (latestEnd === null || r.ret > latestEnd) latestEnd = r.ret;
     }
   }
+  // Same fix as the server-side check: two bookings can each overlap the
+  // requested range without overlapping each other, so sum only the
+  // actual peak concurrent qty (checked at each candidate day) instead
+  // of adding up every overlapping reservation's qty.
+  var candidateDays = [pickupMs];
+  overlapping.forEach(function(r) {
+    if (r.pickup >= pickupMs && r.pickup <= retMs) candidateDays.push(r.pickup);
+    if (r.ret >= pickupMs && r.ret <= retMs) candidateDays.push(r.ret);
+  });
+  var bookedQty = 0;
+  candidateDays.forEach(function(ts) {
+    var dayQty = overlapping.reduce(function(sum, r) {
+      return sum + (ts >= r.pickup && ts <= r.ret ? (r.qty || 1) : 0);
+    }, 0);
+    if (dayQty > bookedQty) bookedQty = dayQty;
+  });
   var availableQty = totalQty - bookedQty;
   if (availableQty <= 0) {
     var nd = new Date(latestEnd + DAY);

@@ -304,8 +304,8 @@ function checkAvailability(item, newPickup, newReturn, requestedQty, libraryKey,
   var np  = new Date(newPickup); np.setHours(0, 0, 0, 0);
   var nr  = new Date(newReturn); nr.setHours(0, 0, 0, 0);
   var DAY = 86400000;
-  var bookedQty = 0;
-  var hasTight  = false;
+  var overlapping = [];
+  var hasTight = false;
   rows.forEach(function(r) {
     var rowItem    = String(r[7]).trim();
     var rowLibrary = String(r[0]).trim();
@@ -314,11 +314,29 @@ function checkAvailability(item, newPickup, newReturn, requestedQty, libraryKey,
     var ep  = new Date(r[10]);  ep.setHours(0, 0, 0, 0);
     var er  = new Date(r[12]); er.setHours(0, 0, 0, 0);
     var qty = (r[8] && !isNaN(parseInt(r[8]))) ? parseInt(r[8]) : 1;
-    if (np <= er && nr >= ep) bookedQty += qty;
+    if (np <= er && nr >= ep) overlapping.push({ ep: ep, er: er, qty: qty });
     if (nr < ep && (ep - nr) / DAY === 1) hasTight = true;
     else if (np > er && (np - er) / DAY === 1) hasTight = true;
   });
-  if (bookedQty + requestedQty > totalQty) return '✗ Unavailable';
+  // Two reservations can each overlap the requested range without ever
+  // overlapping each other (e.g. back-to-back bookings before/after the
+  // new dates) — summing every overlapping row's qty would overcount.
+  // Instead, check the actual peak concurrent qty on each day the
+  // concurrency could change (the new request's start, plus every
+  // overlapping reservation's own start/end within the requested range).
+  var candidateDays = [np.getTime()];
+  overlapping.forEach(function(o) {
+    if (o.ep.getTime() >= np.getTime() && o.ep.getTime() <= nr.getTime()) candidateDays.push(o.ep.getTime());
+    if (o.er.getTime() >= np.getTime() && o.er.getTime() <= nr.getTime()) candidateDays.push(o.er.getTime());
+  });
+  var peakQty = 0;
+  candidateDays.forEach(function(ts) {
+    var dayQty = overlapping.reduce(function(sum, o) {
+      return sum + (ts >= o.ep.getTime() && ts <= o.er.getTime() ? o.qty : 0);
+    }, 0);
+    if (dayQty > peakQty) peakQty = dayQty;
+  });
+  if (peakQty + requestedQty > totalQty) return '✗ Unavailable';
   if (hasTight) return '⚠ Tight turnaround';
   return '✓ Available';
 }

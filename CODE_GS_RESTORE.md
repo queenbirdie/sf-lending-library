@@ -39,6 +39,14 @@ function getLibrary(key) {
   return LIBRARIES.find(function(l) { return l.key === key; }) || LIBRARIES[0];
 }
 
+// getLibrary() intentionally falls back to LIBRARIES[0] for render-time
+// convenience, which means "!getLibrary(key)" can never actually catch an
+// unrecognized key — it always finds *something*. Use this instead at
+// intake points that must reject an invalid/unknown library key.
+function isKnownLibrary(key) {
+  return LIBRARIES.some(function(l) { return l.key === key; });
+}
+
 // ── Inventory columns (0-based) ──────────
 const COL_ITEM_ID        = 0;  // A
 const COL_LIBRARY        = 1;  // B
@@ -160,7 +168,7 @@ function submitReservation(formData) {
     if (!phone)  return { success: false, message: 'Phone number is required.' };
     if (!pickupDateStr || !returnDateStr) return { success: false, message: 'Pickup and return dates are required.' };
     if (!items.length) return { success: false, message: 'No items selected.' };
-    if (!libraryKey || !getLibrary(libraryKey)) return { success: false, message: 'Invalid library.' };
+    if (!libraryKey || !isKnownLibrary(libraryKey)) return { success: false, message: 'Invalid library.' };
     var pickupDate = parseDateString(pickupDateStr);
     var returnDate = parseDateString(returnDateStr);
     if (returnDate <= pickupDate) return { success: false, message: 'Return date must be after pickup date.' };
@@ -980,7 +988,7 @@ function doGet(e) {
 
   if (action === 'availability') {
     var libKey = e.parameter.lib;
-    if (!libKey || !getLibrary(libKey)) {
+    if (!libKey || !isKnownLibrary(libKey)) {
       return ContentService.createTextOutput(JSON.stringify({ error: 'Invalid library key.' }))
         .setMimeType(ContentService.MimeType.JSON);
     }

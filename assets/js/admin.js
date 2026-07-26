@@ -44,12 +44,12 @@ function loadAdminData(cb, opts) {
     if (!ok) { if (cb) cb(false); return; }
     document.getElementById('adminContent').style.display = 'block';
     renderGroupedSection('pendingList', 'pendingCount', data.pending, ['confirm', 'decline', 'revise'], { label: 'Confirm all', status: 'Confirmed', hoistMeta: true });
-    renderGroupedSection('todayReturnsList', 'todayReturnsCount', sortByDateTime(data.todayReturns || [], 'returnDateISO', 'returnTime'), ['markReturned', 'lostDamaged', 'revise'], { label: 'Mark all returned', status: 'Returned', hoistMeta: false });
-    renderGroupedSection('upcomingList', 'upcomingCount', sortByDateTime(data.upcoming || [], 'pickupDateISO', 'pickupTime'), ['markLentOut', 'revise', 'cancel'], { label: 'Mark all lent out', status: 'Lent Out', hoistMeta: false });
-    renderGroupedSection('pickupsList', 'pickupsCount', sortByDateTime(data.tomorrowPickups || [], 'pickupDateISO', 'pickupTime'), ['markLentOut', 'revise', 'cancel'], { label: 'Mark all lent out', status: 'Lent Out', hoistMeta: false });
-    renderSection('returnsList', 'returnsCount', sortByDateTime(data.tomorrowReturns || [], 'returnDateISO', 'returnTime'), ['markReturned', 'revise']);
-    renderSection('checkedOutList', 'checkedOutCount', sortByDateTime(data.checkedOut || [], 'returnDateISO', 'returnTime'), ['markReturned', 'lostDamaged', 'revise']);
-    renderSection('overdueList', 'overdueCount', data.overdue || [], ['markReturned', 'revise'], true);
+    renderGroupedSection('todayReturnsList', 'todayReturnsCount', sortByDateTime(data.todayReturns || [], 'returnDateISO', 'returnTime'), ['markReturned', 'lostDamaged', 'revise'], { label: 'Mark all returned', status: 'Returned', hoistMeta: false }, 'return');
+    renderGroupedSection('upcomingList', 'upcomingCount', sortByDateTime(data.upcoming || [], 'pickupDateISO', 'pickupTime'), ['markLentOut', 'revise', 'cancel'], { label: 'Mark all lent out', status: 'Lent Out', hoistMeta: false }, 'pickup');
+    renderGroupedSection('pickupsList', 'pickupsCount', sortByDateTime(data.tomorrowPickups || [], 'pickupDateISO', 'pickupTime'), ['markLentOut', 'revise', 'cancel'], { label: 'Mark all lent out', status: 'Lent Out', hoistMeta: false }, 'pickup');
+    renderSection('returnsList', 'returnsCount', sortByDateTime(data.tomorrowReturns || [], 'returnDateISO', 'returnTime'), ['markReturned', 'revise'], false, 'return');
+    renderSection('checkedOutList', 'checkedOutCount', sortByDateTime(data.checkedOut || [], 'returnDateISO', 'returnTime'), ['markReturned', 'lostDamaged', 'revise'], false, 'return');
+    renderSection('overdueList', 'overdueCount', data.overdue || [], ['markReturned', 'revise'], true, 'return');
     renderConflicts(data.conflicts || []);
     renderPastReservations('pastReservationsList', 'pastReservationsCount', data.pastReservations || []);
     SECTION_KEYS.forEach(applySectionState);
@@ -115,12 +115,16 @@ function durationDays(e) {
   return isNaN(days) || days < 0 ? null : days;
 }
 
-function metaHtml(e, showLate) {
+function metaHtml(e, showLate, emphasize) {
   var lateLine = (showLate && e.daysLate) ? '<br><span class="admin-card-late">' + e.daysLate + ' day' + (e.daysLate === 1 ? '' : 's') + ' late</span>' : '';
   var days = durationDays(e);
   var durationLabel = days === null ? '' : ' (' + days + ' day' + (days === 1 ? '' : 's') + ')';
+  var pickupText = esc(e.pickupDate) + (e.pickupTime ? ' \xb7 ' + esc(e.pickupTime) : '');
+  var returnText = esc(e.returnDate) + (e.returnTime ? ' \xb7 ' + esc(e.returnTime) : '');
+  if (emphasize === 'pickup') pickupText = '<span class="admin-date-emphasis">' + pickupText + '</span>';
+  if (emphasize === 'return') returnText = '<span class="admin-date-emphasis">' + returnText + '</span>';
   return '<div class="admin-card-detail">' +
-    esc(e.pickupDate) + (e.pickupTime ? ' \xb7 ' + esc(e.pickupTime) : '') + ' &#8594; ' + esc(e.returnDate) + (e.returnTime ? ' \xb7 ' + esc(e.returnTime) : '') + durationLabel + lateLine + '<br>' +
+    pickupText + ' &#8594; ' + returnText + durationLabel + lateLine + '<br>' +
     '<a href="tel:' + esc(e.phone) + '">' + esc(e.phone) + '</a> &middot; <a href="mailto:' + esc(e.email) + '">' + esc(e.email) + '</a></div>';
 }
 
@@ -245,6 +249,83 @@ function timeSelectHtml(id, current) {
   return '<select id="' + id + '">' + opts + '</select>';
 }
 
+function groupReviseFormHtml(groupKey, group) {
+  var first = group[0];
+  var rowsInfo = JSON.stringify(group.map(function(g) { return { row: g.row, qty: g.qty }; }));
+  return '<div class="admin-revise-form" id="grouprevise-' + esc(groupKey) + '" style="display:none">' +
+    '<div class="admin-revise-row">' +
+      '<div class="admin-revise-field"><label>Pickup date</label><input type="date" id="grouprevisePickup-' + esc(groupKey) + '" value="' + esc(first.pickupDateISO) + '"></div>' +
+      '<div class="admin-revise-field"><label>Pickup time</label>' + timeSelectHtml('grouprevisePickupTime-' + esc(groupKey), first.pickupTime) + '</div>' +
+    '</div>' +
+    '<div class="admin-revise-row">' +
+      '<div class="admin-revise-field"><label>Return date</label><input type="date" id="grouprevisereturn-' + esc(groupKey) + '" value="' + esc(first.returnDateISO) + '"></div>' +
+      '<div class="admin-revise-field"><label>Return time</label>' + timeSelectHtml('grouprevisereturnTime-' + esc(groupKey), first.returnTime) + '</div>' +
+    '</div>' +
+    '<div class="admin-revise-error" id="groupreviseError-' + esc(groupKey) + '" style="display:none"></div>' +
+    '<div class="admin-card-actions">' +
+      '<button class="admin-btn admin-btn-confirm" onclick=\'saveGroupRevise(' + JSON.stringify(groupKey) + ',' + rowsInfo + ')\'>Save changes for all ' + group.length + '</button>' +
+      '<button class="admin-btn admin-btn-neutral" onclick=\'toggleGroupRevise(' + JSON.stringify(groupKey) + ')\'>Cancel edit</button>' +
+    '</div></div>';
+}
+
+function toggleGroupRevise(groupKey) {
+  var el = document.getElementById('grouprevise-' + groupKey);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function saveGroupRevise(groupKey, rowsInfo) {
+  var pickupDate = document.getElementById('grouprevisePickup-' + groupKey).value;
+  var pickupTime = document.getElementById('grouprevisePickupTime-' + groupKey).value;
+  var returnDate = document.getElementById('grouprevisereturn-' + groupKey).value;
+  var returnTime = document.getElementById('grouprevisereturnTime-' + groupKey).value;
+  var errEl = document.getElementById('groupreviseError-' + groupKey);
+  errEl.style.display = 'none';
+  if (!pickupDate || !returnDate) { errEl.textContent = 'Pickup and return dates are required.'; errEl.style.display = 'block'; return; }
+  var btn = document.querySelector('#grouprevise-' + groupKey + ' .admin-btn-confirm');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+
+  function saveNext(i) {
+    if (i >= rowsInfo.length) { loadAdminData(null, { silent: true }); return; }
+    var r = rowsInfo[i];
+    apiPost({ action: 'adminReviseReservation', passcode: adminPasscode, row: r.row, pickupDate: pickupDate, pickupTime: pickupTime, returnDate: returnDate, returnTime: returnTime, qty: r.qty }, function(result) {
+      if (result.success) {
+        saveNext(i + 1);
+      } else {
+        errEl.textContent = 'Item ' + (i + 1) + ' of ' + rowsInfo.length + ' failed: ' + (result.message || 'Something went wrong.') + ' Earlier items in this request were already saved.';
+        errEl.style.display = 'block';
+        if (btn) { btn.disabled = false; btn.textContent = 'Save changes for all ' + rowsInfo.length; }
+        loadAdminData(null, { silent: true });
+      }
+    }, function() {
+      errEl.textContent = 'Item ' + (i + 1) + ' of ' + rowsInfo.length + ' failed — please try again. Earlier items in this request were already saved.';
+      errEl.style.display = 'block';
+      if (btn) { btn.disabled = false; btn.textContent = 'Save changes for all ' + rowsInfo.length; }
+      loadAdminData(null, { silent: true });
+    });
+  }
+  saveNext(0);
+}
+
+function bulkButtonsHtml(group, actions, bulkDef) {
+  if (group.length <= 1) return '';
+  var rows = group.map(function(g) { return g.row; });
+  var rowsJson = JSON.stringify(rows);
+  var primary = bulkDef ? '<button class="admin-btn admin-btn-bulk" onclick="bulkUpdateStatus(' + rowsJson + ",'" + bulkDef.status + "',this,'" + esc(bulkDef.label) + "')\">" + esc(bulkDef.label) + ' (' + group.length + ')</button>' : '';
+  var secondary = '';
+  if (actions.indexOf('cancel') !== -1 || actions.indexOf('decline') !== -1) {
+    var cancelLabel = actions.indexOf('decline') !== -1 ? 'Decline all' : 'Cancel all';
+    secondary += '<button class="admin-btn admin-btn-decline" onclick="bulkUpdateStatus(' + rowsJson + ",'Cancelled',this,'" + cancelLabel + "')\">" + cancelLabel + ' (' + group.length + ')</button>';
+  }
+  if (actions.indexOf('revise') !== -1) {
+    var groupKey = String(group[0].groupKey || group[0].row);
+    secondary += '<button class="admin-btn admin-btn-neutral" onclick=\'toggleGroupRevise(' + JSON.stringify(groupKey) + ')\'>Revise all (' + group.length + ')</button>';
+  }
+  var html = '';
+  if (primary) html += '<div class="admin-card-actions">' + primary + '</div>';
+  if (secondary) html += '<div class="admin-card-actions">' + secondary + '</div>';
+  return html;
+}
+
 function reviseFormHtml(e) {
   return '<div class="admin-revise-form" id="revise-' + e.row + '" style="display:none">' +
     '<div class="admin-revise-row">' +
@@ -292,7 +373,7 @@ function saveRevise(row) {
   });
 }
 
-function renderSection(listId, countId, items, actions, showLate) {
+function renderSection(listId, countId, items, actions, showLate, emphasize) {
   setCount(countId, items.length);
   var el = document.getElementById(listId);
   if (!items.length) { el.innerHTML = '<div class="admin-empty">Nothing here.</div>'; return; }
@@ -300,14 +381,14 @@ function renderSection(listId, countId, items, actions, showLate) {
     return '<div class="admin-card" data-search="' + esc(searchTextFor(e)) + '">' +
       '<div class="admin-card-top"><span class="admin-card-name">' + esc(e.name) + '</span><span class="admin-card-lib">' + esc(e.library) + '</span></div>' +
       itemLineHtml(e) +
-      metaHtml(e, showLate) +
+      metaHtml(e, showLate, emphasize) +
       '<div class="admin-card-actions">' + actionButtonsHtml(e, actions) + '</div>' +
       reviseFormHtml(e) +
       '</div>';
   }).join('');
 }
 
-function renderGroupedSection(listId, countId, items, actions, bulkDef) {
+function renderGroupedSection(listId, countId, items, actions, bulkDef, emphasize) {
   setCount(countId, items.length);
   var el = document.getElementById(listId);
   if (!items.length) { el.innerHTML = '<div class="admin-empty">Nothing here.</div>'; return; }
@@ -315,19 +396,22 @@ function renderGroupedSection(listId, countId, items, actions, bulkDef) {
   el.innerHTML = groups.map(function(group) {
     var first = group[0];
     var searchText = group.map(searchTextFor).join(' ');
-    var bulkBtn = (group.length > 1) ? '<button class="admin-btn admin-btn-bulk" onclick="bulkUpdateStatus(' + JSON.stringify(group.map(function(g) { return g.row; })) + ",'" + bulkDef.status + "',this,'" + esc(bulkDef.label) + "')\">" + esc(bulkDef.label) + ' (' + group.length + ')</button>' : '';
+    var groupKey = String(first.groupKey || first.row);
+    var groupLabel = group.length > 1 ? '<div class="admin-group-label">' + group.length + ' items · same request</div>' : '';
     var itemsHtml = group.map(function(e) {
       return '<div class="admin-group-item">' +
         itemLineHtml(e) +
-        (bulkDef.hoistMeta ? '' : metaHtml(e, false)) +
+        (bulkDef.hoistMeta ? '' : metaHtml(e, false, emphasize)) +
         '<div class="admin-card-actions">' + actionButtonsHtml(e, actions) + '</div>' +
         reviseFormHtml(e) +
         '</div>';
     }).join('');
-    return '<div class="admin-card admin-group-card" data-search="' + esc(searchText) + '">' +
+    return '<div class="admin-card' + (group.length > 1 ? ' admin-group-card' : '') + '" data-search="' + esc(searchText) + '">' +
       '<div class="admin-card-top"><span class="admin-card-name">' + esc(first.name) + '</span><span class="admin-card-lib">' + esc(first.library) + '</span></div>' +
-      (bulkDef.hoistMeta ? metaHtml(first, false) : '') +
-      (bulkBtn ? '<div class="admin-card-actions">' + bulkBtn + '</div>' : '') +
+      groupLabel +
+      (bulkDef.hoistMeta ? metaHtml(first, false, emphasize) : '') +
+      bulkButtonsHtml(group, actions, bulkDef) +
+      (group.length > 1 ? groupReviseFormHtml(groupKey, group) : '') +
       '<div class="admin-group-items">' + itemsHtml + '</div>' +
       '</div>';
   }).join('');

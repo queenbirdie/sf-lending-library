@@ -35,6 +35,15 @@ const LIBRARIES = [
   { key: 'yoto',      tabAbbr: 'YT', shortName: 'Yoto',              name: 'Yoto Lending Library',                 address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1YquLATJiVLGYCQtDWjpOylH79mC8nBnH' },
 ];
 
+// ── Pickup reminder look & feel ──────────
+const REMINDER_DECOR = {
+  'kid-gear': { emoji: '🧳', color: '#2E5FA3' },
+  'party':    { emoji: '🎉', color: '#D9622B' },
+  'costumes': { emoji: '🎭', color: '#6B4A8C' },
+  'puzzles':  { emoji: '🧩', color: '#2F7A4F' },
+  'yoto':     { emoji: '🎧', color: '#C77D18' }
+};
+
 function getLibrary(key) {
   return LIBRARIES.find(function(l) { return l.key === key; }) || LIBRARIES[0];
 }
@@ -477,6 +486,85 @@ function sendReceiptEmail(data, items, libraryKey) {
     'Questions? Just reply to this email.\n\n' +
     'Thanks,\nLauren';
   GmailApp.sendEmail(email, subject, body, { bcc: Session.getEffectiveUser().getEmail() });
+}
+
+function sendPickupReminders() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
+  var rows  = sheet.getDataRange().getValues().slice(1);
+  var tz    = Session.getScriptTimeZone();
+  var props = PropertiesService.getScriptProperties();
+  var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(0, 0, 0, 0);
+  function isTomorrow(d) {
+    var dt = d instanceof Date ? d : new Date(d); dt.setHours(0, 0, 0, 0);
+    return dt.getTime() === tomorrow.getTime();
+  }
+  function itemLabel(r) {
+    var qty = parseInt(r[8]); if (isNaN(qty) || qty < 1) qty = 1;
+    var label = String(r[7]).trim();
+    var details = [String(r[6] || '').trim(), String(r[9] || '').trim()].filter(Boolean).join(', ');
+    if (details) label += ' (' + details + ')';
+    if (qty > 1) label += ' x' + qty;
+    return label;
+  }
+  // Group by borrower + library + pickup time so one email covers all their items
+  var groups = {}, order = [];
+  rows.forEach(function(r) {
+    var status = String(r[15]).trim();
+    if (status !== 'Confirmed' && status !== 'Added to existing request') return;
+    if (!isTomorrow(r[10])) return;
+    var email = String(r[3]).trim();
+    var libraryKey = String(r[0]).trim();
+    if (!email || !libraryKey) return;
+    var key = libraryKey + '|' + email + '|' + String(r[11] || '').trim();
+    if (!groups[key]) {
+      order.push(key);
+      groups[key] = { library: libraryKey, name: String(r[2]).trim(), email: email, time: String(r[11] || '').trim(), items: [] };
+    }
+    groups[key].items.push(itemLabel(r));
+  });
+  var pickupFmt = Utilities.formatDate(tomorrow, tz, 'EEEE, MMMM d');
+  var pickupShort = Utilities.formatDate(tomorrow, tz, 'EEE, MMM d');
+  var todayFmt = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  order.forEach(function(key) {
+    var g = groups[key];
+    var sentKey = 'reminder_' + key.replace(/[^a-z0-9]/gi, '_') + '_' + todayFmt;
+    if (props.getProperty(sentKey)) return;
+    var lib = getLibrary(g.library);
+    var deco = REMINDER_DECOR[g.library] || REMINDER_DECOR['kid-gear'];
+    var firstName = g.name.split(' ')[0];
+    var subject = deco.emoji + ' Reminder: your pickup tomorrow (' + pickupShort + ') — ' + lib.shortName;
+    var itemListHtml = g.items.map(function(i) { return '<li>' + i + '</li>'; }).join('');
+    var timeLine = g.time ? g.time : 'TBD — that\'s exactly what we need to nail down!';
+    var html =
+      '<div style="font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; color: #222;">' +
+        '<div style="background:' + deco.color + '; border-radius: 12px 12px 0 0; padding: 28px 24px; text-align: center;">' +
+          '<div style="font-size: 48px; line-height: 1;">' + deco.emoji + '</div>' +
+          '<div style="color: #fff; font-size: 20px; font-weight: 700; margin-top: 8px;">Pickup is tomorrow!</div>' +
+        '</div>' +
+        '<div style="border: 1px solid #eee; border-top: none; border-radius: 0 0 12px 12px; padding: 24px;">' +
+          '<p>Hi ' + firstName + ',</p>' +
+          '<p>Quick reminder that your <strong>' + lib.shortName + '</strong> pickup is <strong>tomorrow, ' + pickupFmt + '</strong>.</p>' +
+          '<p><strong>Picking up:</strong></p>' +
+          '<ul>' + itemListHtml + '</ul>' +
+          '<p><strong>Requested time:</strong> ' + timeLine + '</p>' +
+          '<div style="background:#fff8e1; border-left: 4px solid #fbbc04; padding: 12px 16px; border-radius: 4px; margin: 20px 0;">' +
+            '📱 <strong>Please text or WhatsApp me at ' + lib.phone + '</strong> today to confirm the time and coordinate pickup — that way we\'re both on the same page!' +
+          '</div>' +
+          '<p>Address: ' + lib.address.split(',')[0] + '. Feel free to park temporarily out front — the tow-away signs are ours, just watch street sweeping.</p>' +
+          '<p>See you soon!<br>Lauren</p>' +
+        '</div>' +
+      '</div>';
+    var text =
+      'Hi ' + firstName + ',\n\n' +
+      'Quick reminder that your ' + lib.shortName + ' pickup is tomorrow, ' + pickupFmt + '.\n\n' +
+      'Picking up:\n' + g.items.map(function(i) { return '- ' + i; }).join('\n') + '\n\n' +
+      'Requested time: ' + timeLine + '\n\n' +
+      'Please text or WhatsApp me at ' + lib.phone + ' today to confirm the time and coordinate pickup.\n\n' +
+      'Address: ' + lib.address.split(',')[0] + '. Feel free to park temporarily out front — the tow-away signs are ours, just watch street sweeping.\n\n' +
+      'See you soon!\nLauren';
+    GmailApp.sendEmail(g.email, subject, text, { htmlBody: html, bcc: Session.getEffectiveUser().getEmail() });
+    props.setProperty(sentKey, 'sent');
+  });
 }
 
 function sendPendingReceipts() {
@@ -960,6 +1048,7 @@ function setupTriggers() {
   ScriptApp.newTrigger('sendPendingInvites').timeBased().everyMinutes(5).create();
   ScriptApp.newTrigger('nightlyAudit').timeBased().everyDays(1).atHour(8).create();
   ScriptApp.newTrigger('dailyScheduleEmail').timeBased().everyDays(1).atHour(19).create();
+  ScriptApp.newTrigger('sendPickupReminders').timeBased().everyDays(1).atHour(8).create();
   ScriptApp.newTrigger('setupTriggers').timeBased().everyDays(1).atHour(3).create();
   Logger.log('Triggers installed.');
 }

@@ -36,12 +36,15 @@ const LIBRARIES = [
 ];
 
 // ── Pickup reminder look & feel ──────────
+// Matches the site's card-catalog branding (assets/css/main.css): cream
+// background, navy ink, red rubber-stamp accent, per-library shelf color.
+const REMINDER_STAMP_COLOR = '#C0392B'; // --accent
 const REMINDER_DECOR = {
-  'kid-gear': { emoji: '🧳', color: '#2E5FA3' },
-  'party':    { emoji: '🎉', color: '#D9622B' },
-  'costumes': { emoji: '🎭', color: '#6B4A8C' },
-  'puzzles':  { emoji: '🧩', color: '#2F7A4F' },
-  'yoto':     { emoji: '🎧', color: '#C77D18' }
+  'kid-gear': { color: '#2E5FA3' },
+  'party':    { color: '#D9622B' },
+  'costumes': { color: '#6B4A8C' },
+  'puzzles':  { color: '#2F7A4F' },
+  'yoto':     { color: '#C77D18' }
 };
 
 function getLibrary(key) {
@@ -532,32 +535,40 @@ function sendPickupReminders() {
     var lib = getLibrary(g.library);
     var deco = REMINDER_DECOR[g.library] || REMINDER_DECOR['kid-gear'];
     var firstName = g.name.split(' ')[0];
-    var subject = deco.emoji + ' Reminder: your pickup tomorrow (' + pickupShort + ') — ' + lib.shortName;
-    var itemListHtml = g.items.map(function(i) { return '<li>' + i + '</li>'; }).join('');
+    var subject = '📚 Pickup due tomorrow (' + pickupShort + ') — ' + lib.shortName;
+    var itemListHtml = g.items.map(function(i) { return '<div style="padding:3px 0;">• ' + i + '</div>'; }).join('');
     var timeLine = g.time ? g.time : 'TBD — that\'s exactly what we need to nail down!';
     var html =
-      '<div style="font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; color: #222;">' +
-        '<div style="background:' + deco.color + '; border-radius: 12px 12px 0 0; padding: 28px 24px; text-align: center;">' +
-          '<div style="font-size: 48px; line-height: 1;">' + deco.emoji + '</div>' +
-          '<div style="color: #fff; font-size: 20px; font-weight: 700; margin-top: 8px;">Pickup is tomorrow!</div>' +
+      '<div style="font-family: \'Courier New\', Courier, monospace; max-width: 480px; margin: 0 auto; background:#F3ECDC; padding: 28px 16px;">' +
+        '<div style="text-align:center; margin-bottom: 20px;">' +
+          '<div style="font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color:#1F2C3D;">✦ SF Lending Library ✦</div>' +
         '</div>' +
-        '<div style="border: 1px solid #eee; border-top: none; border-radius: 0 0 12px 12px; padding: 24px;">' +
-          '<p>Hi ' + firstName + ',</p>' +
-          '<p>Quick reminder that your <strong>' + lib.shortName + '</strong> pickup is <strong>tomorrow, ' + pickupFmt + '</strong>.</p>' +
-          '<p><strong>Picking up:</strong></p>' +
-          '<ul>' + itemListHtml + '</ul>' +
-          '<p><strong>Requested time:</strong> ' + timeLine + '</p>' +
-          '<div style="background:#fff8e1; border-left: 4px solid #fbbc04; padding: 12px 16px; border-radius: 4px; margin: 20px 0;">' +
-            '📱 <strong>Please text or WhatsApp me at ' + lib.phone + '</strong> today to confirm the time and coordinate pickup — that way we\'re both on the same page!' +
+        '<div style="background:#FFFDF7; border: 1px solid #E3D9BF; border-top: 4px solid ' + deco.color + '; border-radius: 4px; padding: 26px 22px;">' +
+          '<div style="text-align:center; margin-bottom: 20px;">' +
+            '<div style="display:inline-block; border: 3px double ' + REMINDER_STAMP_COLOR + '; border-radius: 6px; padding: 8px 22px 5px; transform: rotate(-4deg);">' +
+              '<div style="font-size: 14px; letter-spacing: 2px; text-transform: uppercase; color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">Pickup Due Tomorrow</div>' +
+            '</div>' +
           '</div>' +
-          '<p>Address: ' + lib.address.split(',')[0] + '. Feel free to park temporarily out front — the tow-away signs are ours, just watch street sweeping.</p>' +
-          '<p>See you soon!<br>Lauren</p>' +
+          '<p style="color:#1F2C3D; margin:0 0 12px;">Hi ' + firstName + ',</p>' +
+          '<p style="color:#1F2C3D; margin:0 0 16px;">Quick reminder — your <strong>' + lib.shortName + '</strong> pickup is <strong>tomorrow, ' + pickupFmt + '</strong>.</p>' +
+          '<div style="border-top: 1px dashed #E3D9BF; border-bottom: 1px dashed #E3D9BF; padding: 14px 0; margin: 0 0 16px;">' +
+            '<div style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:' + REMINDER_STAMP_COLOR + '; margin-bottom:8px; font-weight:bold;">Checked Out To You</div>' +
+            '<div style="color:#1F2C3D;">' + itemListHtml + '</div>' +
+          '</div>' +
+          '<p style="color:#1F2C3D; margin:0 0 16px;"><strong>Requested time:</strong> ' + timeLine + '</p>' +
+          '<div style="border-left: 3px solid ' + REMINDER_STAMP_COLOR + '; background:#F7E4E0; padding: 12px 16px; margin: 0 0 18px; border-radius: 2px; color:#1F2C3D;">' +
+            '<strong>Please text or WhatsApp me at ' + lib.phone + '</strong> today to confirm the time and coordinate pickup — that way we\'re both on the same page!' +
+          '</div>' +
+          '<p style="font-size:13px; color:#4E5A6B; margin:0 0 16px; line-height:1.6;">Address: ' + lib.address.split(',')[0] + '. Feel free to park temporarily out front — the tow-away signs are ours, just watch street sweeping.</p>' +
+          '<p style="color:#1F2C3D; margin:0;">See you soon!<br>Lauren</p>' +
         '</div>' +
       '</div>';
     var text =
+      '✦ SF LENDING LIBRARY ✦\n\n' +
+      'PICKUP DUE TOMORROW\n\n' +
       'Hi ' + firstName + ',\n\n' +
-      'Quick reminder that your ' + lib.shortName + ' pickup is tomorrow, ' + pickupFmt + '.\n\n' +
-      'Picking up:\n' + g.items.map(function(i) { return '- ' + i; }).join('\n') + '\n\n' +
+      'Quick reminder — your ' + lib.shortName + ' pickup is tomorrow, ' + pickupFmt + '.\n\n' +
+      'CHECKED OUT TO YOU\n' + g.items.map(function(i) { return '- ' + i; }).join('\n') + '\n\n' +
       'Requested time: ' + timeLine + '\n\n' +
       'Please text or WhatsApp me at ' + lib.phone + ' today to confirm the time and coordinate pickup.\n\n' +
       'Address: ' + lib.address.split(',')[0] + '. Feel free to park temporarily out front — the tow-away signs are ours, just watch street sweeping.\n\n' +

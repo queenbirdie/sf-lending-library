@@ -2,8 +2,10 @@
 
 New: borrowers now get an automatic reminder email at **8am the morning
 before their pickup**, asking them to text/WhatsApp you to confirm the time
-and coordinate. It's colorful/fun (matches each library's color + emoji) and
-covers all their items in one email if they're picking up more than one thing.
+and coordinate. It covers all their items in one email if they're picking up
+more than one thing, and it's styled to match the site's card-catalog look
+(cream background, typewriter font, red rubber-stamp "Pickup Due Tomorrow"
+badge, per-library shelf color) instead of a generic modern template.
 
 This lives in `Code.js` as a new function, `sendPickupReminders()`, plus one
 new trigger line. `CODE_GS_RESTORE.md` has been updated with the full,
@@ -15,9 +17,16 @@ correct contents of `Code.js` including this feature baked in.
 - Looks at the `reservations` tab for rows where pickup date = tomorrow and
   status is `Confirmed` or `Added to existing request`.
 - Groups by borrower (so one person picking up 3 things gets 1 email, not 3).
-- Sends an HTML email with the library's color/emoji, the item list, the
-  requested time, and a highlighted call-to-action to text/WhatsApp you at
-  the library's phone number to confirm and coordinate.
+- Sends an HTML email matching `assets/css/main.css`'s branding: cream
+  (`--bg`) page background, ink navy (`--ink`) text, a rotated red
+  (`--accent`) double-bordered "Pickup Due Tomorrow" stamp, a dashed-line
+  divider around the item list (echoing the FAQ's notebook-line styling),
+  and a top accent bar in that library's own shelf color (`--cat-*`). Body
+  copy uses `Courier New` — a universally-supported monospace fallback for
+  the site's `Special Elite`/`Courier Prime` fonts, since custom web fonts
+  aren't reliable in email clients.
+- Includes a highlighted call-to-action to text/WhatsApp you at the
+  library's phone number to confirm and coordinate.
 - You're bcc'd on every reminder, same as the receipt/confirmation emails.
 - Idempotent — records what it's sent in Script Properties, so re-running it
   the same day won't double-send even if the trigger fires twice.
@@ -36,12 +45,13 @@ patch in these three pieces instead:
    `function getLibrary(key) {`):
 
    ```javascript
+   const REMINDER_STAMP_COLOR = '#C0392B'; // --accent
    const REMINDER_DECOR = {
-     'kid-gear': { emoji: '🧳', color: '#2E5FA3' },
-     'party':    { emoji: '🎉', color: '#D9622B' },
-     'costumes': { emoji: '🎭', color: '#6B4A8C' },
-     'puzzles':  { emoji: '🧩', color: '#2F7A4F' },
-     'yoto':     { emoji: '🎧', color: '#C77D18' }
+     'kid-gear': { color: '#2E5FA3' },
+     'party':    { color: '#D9622B' },
+     'costumes': { color: '#6B4A8C' },
+     'puzzles':  { color: '#2F7A4F' },
+     'yoto':     { color: '#C77D18' }
    };
    ```
 
@@ -74,7 +84,8 @@ endpoints, so nothing on the live site changes.
 The wording and colors live inside `sendPickupReminders()`. A few things
 you might want to tweak:
 
-- **Colors/emoji** — edit `REMINDER_DECOR` at the top.
+- **Colors** — edit `REMINDER_DECOR` (per-library shelf color) or
+  `REMINDER_STAMP_COLOR` (the red stamp/accent) at the top.
 - **The ask** — currently: *"Please text or WhatsApp me at [phone] today to
   confirm the time and coordinate pickup."* Change the copy in the `html`
   and `text` variables if you want different phrasing.

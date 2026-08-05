@@ -491,6 +491,12 @@ function sendReceiptEmail(data, items, libraryKey) {
   GmailApp.sendEmail(email, subject, body, { bcc: Session.getEffectiveUser().getEmail() });
 }
 
+function pickupReminderWhatsAppLink(phone) {
+  var digits = String(phone).replace(/\D/g, '');
+  if (digits.length === 10) digits = '1' + digits;
+  return 'https://wa.me/' + digits;
+}
+
 function sendPickupReminders() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
   var rows  = sheet.getDataRange().getValues().slice(1);
@@ -526,8 +532,10 @@ function sendPickupReminders() {
     groups[key].items.push(itemLabel(r));
   });
   var pickupFmt = Utilities.formatDate(tomorrow, tz, 'EEEE, MMMM d');
-  var pickupShort = Utilities.formatDate(tomorrow, tz, 'EEE, MMM d');
   var todayFmt = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  // Consistent type scale used throughout the email — xs for labels/fine print,
+  // base for all body copy, and one deliberately larger size for the stamp.
+  var FS_XS = '11px', FS_SM = '12px', FS_BASE = '14px', FS_STAMP = '13px';
   order.forEach(function(key) {
     var g = groups[key];
     var sentKey = 'reminder_' + key.replace(/[^a-z0-9]/gi, '_') + '_' + todayFmt;
@@ -535,42 +543,50 @@ function sendPickupReminders() {
     var lib = getLibrary(g.library);
     var deco = REMINDER_DECOR[g.library] || REMINDER_DECOR['kid-gear'];
     var firstName = g.name.split(' ')[0];
-    var subject = '📚 Pickup due tomorrow (' + pickupShort + ') — ' + lib.shortName;
+    var waLink = pickupReminderWhatsAppLink(lib.phone);
+    var whenText = g.time ? (pickupFmt + ' at ' + g.time) : pickupFmt;
+    var timeNote = g.time ? '' : ' — time still to be confirmed';
+    var subject = g.time
+      ? '📚 Pickup tomorrow at ' + g.time + ' — ' + lib.shortName
+      : '📚 Pickup tomorrow — ' + lib.shortName + ' (time TBD)';
     var itemListHtml = g.items.map(function(i) { return '<div style="padding:3px 0;">• ' + i + '</div>'; }).join('');
-    var timeLine = g.time ? g.time : 'TBD — that\'s exactly what we need to nail down!';
     var html =
-      '<div style="font-family: \'Courier New\', Courier, monospace; max-width: 480px; margin: 0 auto; background:#F3ECDC; padding: 28px 16px;">' +
+      '<div style="font-family: \'Courier New\', Courier, monospace; font-size: ' + FS_BASE + '; line-height: 1.6; max-width: 480px; margin: 0 auto; background:#F3ECDC; padding: 28px 16px;">' +
         '<div style="text-align:center; margin-bottom: 20px;">' +
-          '<div style="font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color:#1F2C3D;">✦ SF Lending Library ✦</div>' +
+          '<div style="font-size: ' + FS_XS + '; letter-spacing: 3px; text-transform: uppercase; color:#1F2C3D;">✦ SF Lending Library ✦</div>' +
         '</div>' +
         '<div style="background:#FFFDF7; border: 1px solid #E3D9BF; border-top: 4px solid ' + deco.color + '; border-radius: 4px; padding: 26px 22px;">' +
           '<div style="text-align:center; margin-bottom: 20px;">' +
             '<div style="display:inline-block; border: 3px double ' + REMINDER_STAMP_COLOR + '; border-radius: 6px; padding: 8px 22px 5px; transform: rotate(-4deg);">' +
-              '<div style="font-size: 14px; letter-spacing: 2px; text-transform: uppercase; color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">Pickup Due Tomorrow</div>' +
+              '<div style="font-size: ' + FS_STAMP + '; letter-spacing: 2px; text-transform: uppercase; color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">Pickup Tomorrow</div>' +
             '</div>' +
           '</div>' +
-          '<p style="color:#1F2C3D; margin:0 0 12px;">Hi ' + firstName + ',</p>' +
-          '<p style="color:#1F2C3D; margin:0 0 16px;">Quick reminder — your <strong>' + lib.shortName + '</strong> pickup is <strong>tomorrow, ' + pickupFmt + '</strong>.</p>' +
+          '<p style="font-size: ' + FS_BASE + '; color:#1F2C3D; margin:0 0 12px;">Hi ' + firstName + ',</p>' +
+          '<p style="font-size: ' + FS_BASE + '; color:#1F2C3D; margin:0 0 16px;">Quick reminder — your <strong>' + lib.shortName + '</strong> pickup is <strong>tomorrow, ' + whenText + '</strong>' + timeNote + '.</p>' +
           '<div style="border-top: 1px dashed #E3D9BF; border-bottom: 1px dashed #E3D9BF; padding: 14px 0; margin: 0 0 16px;">' +
-            '<div style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:' + REMINDER_STAMP_COLOR + '; margin-bottom:8px; font-weight:bold;">Checked Out To You</div>' +
-            '<div style="color:#1F2C3D;">' + itemListHtml + '</div>' +
+            '<div style="font-size: ' + FS_XS + '; text-transform:uppercase; letter-spacing:1px; color:' + REMINDER_STAMP_COLOR + '; margin-bottom:8px; font-weight:bold;">Checked Out To You</div>' +
+            '<div style="font-size: ' + FS_BASE + '; color:#1F2C3D;">' + itemListHtml + '</div>' +
           '</div>' +
-          '<p style="color:#1F2C3D; margin:0 0 16px;"><strong>Requested time:</strong> ' + timeLine + '</p>' +
-          '<div style="border-left: 3px solid ' + REMINDER_STAMP_COLOR + '; background:#F7E4E0; padding: 12px 16px; margin: 0 0 18px; border-radius: 2px; color:#1F2C3D;">' +
-            '<strong>Please text or WhatsApp me at ' + lib.phone + '</strong> today to confirm the time and coordinate pickup — that way we\'re both on the same page!' +
+          '<div style="font-size: ' + FS_XS + '; text-transform:uppercase; letter-spacing:1px; color:' + REMINDER_STAMP_COLOR + '; margin-bottom:8px; font-weight:bold;">To Do</div>' +
+          '<div style="border-left: 3px solid ' + REMINDER_STAMP_COLOR + '; background:#F7E4E0; padding: 12px 16px; margin: 0 0 18px; border-radius: 2px; color:#1F2C3D; font-size: ' + FS_BASE + ';">' +
+            '☐ <a href="' + waLink + '" style="color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">WhatsApp me</a> today to confirm the time and coordinate pickup — that\'s where I handle all the details now.' +
           '</div>' +
-          '<p style="font-size:13px; color:#4E5A6B; margin:0 0 16px; line-height:1.6;">Address: ' + lib.address.split(',')[0] + '. Feel free to park temporarily out front — the tow-away signs are ours, just watch street sweeping.</p>' +
-          '<p style="color:#1F2C3D; margin:0;">See you soon!<br>Lauren</p>' +
+          '<p style="font-size: ' + FS_SM + '; color:#4E5A6B; margin:0 0 16px;">Address: ' + lib.address.split(',')[0] + '. Feel free to park temporarily out front — the tow-away signs are ours, just watch street sweeping.</p>' +
+          '<p style="font-size: ' + FS_BASE + '; color:#1F2C3D; margin:0;">See you soon!<br>Lauren</p>' +
+        '</div>' +
+        '<div style="text-align:center; margin-top: 18px;">' +
+          '<div style="display:inline-block; height: 18px; width: 140px; background-image: repeating-linear-gradient(90deg, #1F2C3D 0px, #1F2C3D 2px, transparent 2px, transparent 4px, #1F2C3D 4px, #1F2C3D 5px, transparent 5px, transparent 8px, #1F2C3D 8px, #1F2C3D 11px, transparent 11px, transparent 13px, #1F2C3D 13px, #1F2C3D 14px, transparent 14px, transparent 17px);"></div>' +
+          '<div style="font-size: ' + FS_XS + '; letter-spacing: 2px; text-transform: uppercase; color:#8A97A6; margin-top: 6px;">Borrow &middot; Return &middot; Repeat</div>' +
         '</div>' +
       '</div>';
     var text =
       '✦ SF LENDING LIBRARY ✦\n\n' +
-      'PICKUP DUE TOMORROW\n\n' +
+      'PICKUP TOMORROW\n\n' +
       'Hi ' + firstName + ',\n\n' +
-      'Quick reminder — your ' + lib.shortName + ' pickup is tomorrow, ' + pickupFmt + '.\n\n' +
+      'Quick reminder — your ' + lib.shortName + ' pickup is tomorrow, ' + whenText + timeNote + '.\n\n' +
       'CHECKED OUT TO YOU\n' + g.items.map(function(i) { return '- ' + i; }).join('\n') + '\n\n' +
-      'Requested time: ' + timeLine + '\n\n' +
-      'Please text or WhatsApp me at ' + lib.phone + ' today to confirm the time and coordinate pickup.\n\n' +
+      'TO DO\n' +
+      '- WhatsApp me at ' + lib.phone + ' today to confirm the time and coordinate pickup — that\'s where I handle all the details now: ' + waLink + '\n\n' +
       'Address: ' + lib.address.split(',')[0] + '. Feel free to park temporarily out front — the tow-away signs are ours, just watch street sweeping.\n\n' +
       'See you soon!\nLauren';
     GmailApp.sendEmail(g.email, subject, text, { htmlBody: html, bcc: Session.getEffectiveUser().getEmail() });

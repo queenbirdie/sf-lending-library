@@ -25,8 +25,11 @@ correct contents of `Code.js` including this feature baked in.
   copy uses `Courier New` — a universally-supported monospace fallback for
   the site's `Special Elite`/`Courier Prime` fonts, since custom web fonts
   aren't reliable in email clients.
-- Includes a highlighted call-to-action to text/WhatsApp you at the
-  library's phone number to confirm and coordinate.
+- Includes a checklist-style call-to-action (☐, matching the calendar-invite
+  checklist style) with a tappable `wa.me` WhatsApp link — all borrower
+  communication funnels to WhatsApp now, no more "text or WhatsApp."
+- The pickup date and time (if set) are stated together in the very first
+  line, so it's readable at a glance without hunting further down.
 - You're bcc'd on every reminder, same as the receipt/confirmation emails.
 - Idempotent — records what it's sent in Script Properties, so re-running it
   the same day won't double-send even if the trigger fires twice.
@@ -55,9 +58,9 @@ patch in these three pieces instead:
    };
    ```
 
-2. **Add the `sendPickupReminders()` function** — copy it from
-   `CODE_GS_RESTORE.md` (it sits right after `sendReceiptEmail`, before
-   `sendPendingReceipts`).
+2. **Add the `pickupReminderWhatsAppLink()` helper and the
+   `sendPickupReminders()` function** — copy both from `CODE_GS_RESTORE.md`
+   (they sit right after `sendReceiptEmail`, before `sendPendingReceipts`).
 
 3. **Add one line to `setupTriggers()`**, next to the other daily triggers:
 

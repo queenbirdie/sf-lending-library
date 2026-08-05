@@ -535,7 +535,7 @@ function sendPickupReminders() {
   var todayFmt = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
   // Consistent type scale used throughout the email — xs for labels/fine print,
   // base for all body copy, and one deliberately larger size for the stamp.
-  var FS_XS = '11px', FS_SM = '12px', FS_BASE = '14px', FS_STAMP = '13px';
+  var FS_XS = '11px', FS_BASE = '14px', FS_STAMP = '13px';
   order.forEach(function(key) {
     var g = groups[key];
     var sentKey = 'reminder_' + key.replace(/[^a-z0-9]/gi, '_') + '_' + todayFmt;
@@ -562,18 +562,18 @@ function sendPickupReminders() {
             '</div>' +
           '</div>' +
           '<p style="font-size: ' + FS_BASE + '; color:#1F2C3D; margin:0 0 12px;">Hi ' + firstName + ',</p>' +
-          '<p style="font-size: ' + FS_BASE + '; color:#1F2C3D; margin:0 0 16px;">Quick reminder — your <strong>' + lib.shortName + '</strong> pickup is <strong>tomorrow, ' + whenText + '</strong>' + timeNote + '.</p>' +
+          '<p style="font-size: ' + FS_BASE + '; color:#1F2C3D; margin:0 0 16px;">Quick reminder — your ' + lib.shortName + ' pickup is tomorrow, ' + whenText + timeNote + '.</p>' +
           '<div style="border-top: 1px dashed #E3D9BF; border-bottom: 1px dashed #E3D9BF; padding: 14px 0; margin: 0 0 16px;">' +
-            '<div style="font-size: ' + FS_XS + '; text-transform:uppercase; letter-spacing:1px; color:' + REMINDER_STAMP_COLOR + '; margin-bottom:8px; font-weight:bold;">Checked Out To You</div>' +
+            '<div style="font-size: ' + FS_XS + '; text-transform:uppercase; letter-spacing:1px; color:' + REMINDER_STAMP_COLOR + '; margin-bottom:8px; font-weight:bold;">Checked Out</div>' +
             '<div style="font-size: ' + FS_BASE + '; color:#1F2C3D;">' + itemListHtml + '</div>' +
           '</div>' +
           '<div style="font-size: ' + FS_XS + '; text-transform:uppercase; letter-spacing:1px; color:' + REMINDER_STAMP_COLOR + '; margin-bottom:8px; font-weight:bold;">To Do</div>' +
           '<div style="border-left: 3px solid ' + REMINDER_STAMP_COLOR + '; background:#F7E4E0; padding: 12px 16px; margin: 0 0 18px; border-radius: 2px; color:#1F2C3D; font-size: ' + FS_BASE + ';">' +
-            '<span style="display:inline-block; width:14px; height:14px; line-height:12px; text-align:center; border:2px solid ' + REMINDER_STAMP_COLOR + '; border-radius:3px; font-size:11px; font-weight:bold; color:' + REMINDER_STAMP_COLOR + '; margin-right:6px; vertical-align:middle;">&#10003;</span>' +
-            '<a href="' + waLink + '" style="color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">WhatsApp me</a> today to confirm the time and coordinate pickup — that\'s where I handle all the details now.' +
+            '<span style="display:inline-block; width:14px; height:14px; line-height:12px; text-align:center; border:2px solid ' + REMINDER_STAMP_COLOR + '; border-radius:3px; font-size:32px; font-weight:bold; color:' + REMINDER_STAMP_COLOR + '; margin-right:16px; vertical-align:middle;">&#10003;</span>' +
+            '<a href="' + waLink + '" style="color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">WhatsApp me</a> today to confirm and coordinate pickup.' +
           '</div>' +
-          '<p style="font-size: ' + FS_SM + '; color:#4E5A6B; margin:0 0 6px;">Address &amp; parking details are in your calendar invite.</p>' +
-          '<p style="font-size: ' + FS_SM + '; color:#4E5A6B; margin:0 0 16px;">Questions? <a href="https://www.sflendinglibrary.org" style="color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">www.sflendinglibrary.org</a></p>' +
+          '<p style="font-size: ' + FS_BASE + '; color:#4E5A6B; margin:0 0 6px;">Address &amp; parking details are in your calendar invite.</p>' +
+          '<p style="font-size: ' + FS_BASE + '; color:#4E5A6B; margin:0 0 16px;">Questions? <a href="https://www.sflendinglibrary.org" style="color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">www.sflendinglibrary.org</a></p>' +
           '<p style="font-size: ' + FS_BASE + '; color:#1F2C3D; margin:0;">See you soon!<br>Lauren</p>' +
         '</div>' +
         '<div style="text-align:center; margin-top: 18px;">' +
@@ -585,9 +585,9 @@ function sendPickupReminders() {
       'PICKUP TOMORROW\n\n' +
       'Hi ' + firstName + ',\n\n' +
       'Quick reminder — your ' + lib.shortName + ' pickup is tomorrow, ' + whenText + timeNote + '.\n\n' +
-      'CHECKED OUT TO YOU\n' + g.items.map(function(i) { return '- ' + i; }).join('\n') + '\n\n' +
+      'CHECKED OUT\n' + g.items.map(function(i) { return '- ' + i; }).join('\n') + '\n\n' +
       'TO DO\n' +
-      '[ ] WhatsApp me at ' + lib.phone + ' today to confirm the time and coordinate pickup — that\'s where I handle all the details now: ' + waLink + '\n\n' +
+      '[ ] WhatsApp me at ' + lib.phone + ' today to confirm and coordinate pickup: ' + waLink + '\n\n' +
       'Address & parking details are in your calendar invite.\n\n' +
       'Questions? www.sflendinglibrary.org\n\n' +
       'See you soon!\nLauren';

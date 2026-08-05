@@ -569,9 +569,11 @@ function sendPickupReminders() {
           '</div>' +
           '<div style="font-size: ' + FS_XS + '; text-transform:uppercase; letter-spacing:1px; color:' + REMINDER_STAMP_COLOR + '; margin-bottom:8px; font-weight:bold;">To Do</div>' +
           '<div style="border-left: 3px solid ' + REMINDER_STAMP_COLOR + '; background:#F7E4E0; padding: 12px 16px; margin: 0 0 18px; border-radius: 2px; color:#1F2C3D; font-size: ' + FS_BASE + ';">' +
-            '☐ <a href="' + waLink + '" style="color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">WhatsApp me</a> today to confirm the time and coordinate pickup — that\'s where I handle all the details now.' +
+            '<span style="display:inline-block; width:14px; height:14px; line-height:12px; text-align:center; border:2px solid ' + REMINDER_STAMP_COLOR + '; border-radius:3px; font-size:11px; font-weight:bold; color:' + REMINDER_STAMP_COLOR + '; margin-right:6px; vertical-align:middle;">&#10003;</span>' +
+            '<a href="' + waLink + '" style="color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">WhatsApp me</a> today to confirm the time and coordinate pickup — that\'s where I handle all the details now.' +
           '</div>' +
-          '<p style="font-size: ' + FS_SM + '; color:#4E5A6B; margin:0 0 16px;">Address: ' + lib.address.split(',')[0] + '. Feel free to park temporarily out front — the tow-away signs are ours, just watch street sweeping.</p>' +
+          '<p style="font-size: ' + FS_SM + '; color:#4E5A6B; margin:0 0 6px;">Address &amp; parking details are in your calendar invite.</p>' +
+          '<p style="font-size: ' + FS_SM + '; color:#4E5A6B; margin:0 0 16px;">Questions? <a href="https://www.sflendinglibrary.org" style="color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">www.sflendinglibrary.org</a></p>' +
           '<p style="font-size: ' + FS_BASE + '; color:#1F2C3D; margin:0;">See you soon!<br>Lauren</p>' +
         '</div>' +
         '<div style="text-align:center; margin-top: 18px;">' +
@@ -585,8 +587,9 @@ function sendPickupReminders() {
       'Quick reminder — your ' + lib.shortName + ' pickup is tomorrow, ' + whenText + timeNote + '.\n\n' +
       'CHECKED OUT TO YOU\n' + g.items.map(function(i) { return '- ' + i; }).join('\n') + '\n\n' +
       'TO DO\n' +
-      '- WhatsApp me at ' + lib.phone + ' today to confirm the time and coordinate pickup — that\'s where I handle all the details now: ' + waLink + '\n\n' +
-      'Address: ' + lib.address.split(',')[0] + '. Feel free to park temporarily out front — the tow-away signs are ours, just watch street sweeping.\n\n' +
+      '[ ] WhatsApp me at ' + lib.phone + ' today to confirm the time and coordinate pickup — that\'s where I handle all the details now: ' + waLink + '\n\n' +
+      'Address & parking details are in your calendar invite.\n\n' +
+      'Questions? www.sflendinglibrary.org\n\n' +
       'See you soon!\nLauren';
     GmailApp.sendEmail(g.email, subject, text, { htmlBody: html, bcc: Session.getEffectiveUser().getEmail() });
     props.setProperty(sentKey, 'sent');

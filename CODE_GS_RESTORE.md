@@ -575,8 +575,7 @@ function sendPickupReminders() {
           '<p style="font-size: ' + FS_BASE + '; color:#1F2C3D; margin:0;">See you soon!<br>Lauren</p>' +
         '</div>' +
         '<div style="text-align:center; margin-top: 18px;">' +
-          '<div style="display:inline-block; height: 18px; width: 140px; background-image: repeating-linear-gradient(90deg, #1F2C3D 0px, #1F2C3D 2px, transparent 2px, transparent 4px, #1F2C3D 4px, #1F2C3D 5px, transparent 5px, transparent 8px, #1F2C3D 8px, #1F2C3D 11px, transparent 11px, transparent 13px, #1F2C3D 13px, #1F2C3D 14px, transparent 14px, transparent 17px);"></div>' +
-          '<div style="font-size: ' + FS_XS + '; letter-spacing: 2px; text-transform: uppercase; color:#8A97A6; margin-top: 6px;">Borrow &middot; Return &middot; Repeat</div>' +
+          '<div style="font-size: ' + FS_XS + '; letter-spacing: 2px; text-transform: uppercase; color:#8A97A6;"><span style="text-decoration: line-through; opacity: 0.65;">Buy</span> &middot; Borrow &middot; Return &middot; Repeat</div>' +
         '</div>' +
       '</div>';
     var text =

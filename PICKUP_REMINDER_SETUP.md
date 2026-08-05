@@ -1,10 +1,10 @@
 # Pickup reminder emails — setup
 
 New: borrowers now get an automatic reminder email at **8am the morning
-before their pickup**, asking them to text/WhatsApp you to confirm the time
+before their pickup**, asking them to WhatsApp you to confirm the time
 and coordinate. It covers all their items in one email if they're picking up
 more than one thing, and it's styled to match the site's card-catalog look
-(cream background, typewriter font, red rubber-stamp "Pickup Due Tomorrow"
+(cream background, typewriter font, red rubber-stamp "Pickup Tomorrow"
 badge, per-library shelf color) instead of a generic modern template.
 
 This lives in `Code.js` as a new function, `sendPickupReminders()`, plus one
@@ -19,12 +19,15 @@ correct contents of `Code.js` including this feature baked in.
 - Groups by borrower (so one person picking up 3 things gets 1 email, not 3).
 - Sends an HTML email matching `assets/css/main.css`'s branding: cream
   (`--bg`) page background, ink navy (`--ink`) text, a rotated red
-  (`--accent`) double-bordered "Pickup Due Tomorrow" stamp, a dashed-line
+  (`--accent`) double-bordered "Pickup Tomorrow" stamp, a dashed-line
   divider around the item list (echoing the FAQ's notebook-line styling),
   and a top accent bar in that library's own shelf color (`--cat-*`). Body
   copy uses `Courier New` — a universally-supported monospace fallback for
   the site's `Special Elite`/`Courier Prime` fonts, since custom web fonts
   aren't reliable in email clients.
+- Subject line is plain text (no emoji) — emoji in subjects can trigger
+  encoding/spam-filter quirks in some Gmail configurations, so it's
+  deliberately left out here.
 - Includes a checklist-style call-to-action (☐, matching the calendar-invite
   checklist style) with a tappable `wa.me` WhatsApp link — all borrower
   communication funnels to WhatsApp now, no more "text or WhatsApp."
@@ -58,15 +61,34 @@ patch in these three pieces instead:
    };
    ```
 
-2. **Add the `pickupReminderWhatsAppLink()` helper and the
-   `sendPickupReminders()` function** — copy both from `CODE_GS_RESTORE.md`
+2. **Add four functions** — `pickupReminderWhatsAppLink()`,
+   `buildPickupReminderEmail()`, `sendPickupReminders()`, and
+   `testPickupReminderEmail()` — copy all of them from `CODE_GS_RESTORE.md`
    (they sit right after `sendReceiptEmail`, before `sendPendingReceipts`).
+   `buildPickupReminderEmail()` builds the subject/html/text once and is
+   shared by the real sender and the test function, so the two can never
+   drift out of sync.
 
 3. **Add one line to `setupTriggers()`**, next to the other daily triggers:
 
    ```javascript
    ScriptApp.newTrigger('sendPickupReminders').timeBased().everyDays(1).atHour(8).create();
    ```
+
+## Preview it for real
+
+Don't preview this by creating a Gmail draft and opening it — Gmail's
+compose/draft editor is a rich-text editor with limited style support, and
+it silently strips backgrounds, borders, letter-spacing, and the rotated
+stamp when you open a styled draft, which makes it look broken even though
+the real email is fine.
+
+Instead, run `testPickupReminderEmail()` directly from the Apps Script
+editor's function dropdown (Run button). It calls `GmailApp.sendEmail()`
+just like the real trigger does, so it sends an actual received email to
+yourself — not a draft — with full styling intact. Check it on both
+desktop and your phone's Gmail app there. Edit the `libraryKey` variable
+at the top of the function to preview a different library's shelf color.
 
 ## Activate it today
 
@@ -84,13 +106,17 @@ endpoints, so nothing on the live site changes.
 
 ## Customizing the message
 
-The wording and colors live inside `sendPickupReminders()`. A few things
-you might want to tweak:
+The wording and colors live inside `buildPickupReminderEmail()`. A few
+things you might want to tweak:
 
 - **Colors** — edit `REMINDER_DECOR` (per-library shelf color) or
   `REMINDER_STAMP_COLOR` (the red stamp/accent) at the top.
-- **The ask** — currently: *"Please text or WhatsApp me at [phone] today to
-  confirm the time and coordinate pickup."* Change the copy in the `html`
-  and `text` variables if you want different phrasing.
+- **Text sizes** — `REMINDER_FS_XS` / `REMINDER_FS_BASE` / `REMINDER_FS_STAMP`,
+  also at the top, so the whole email stays on one deliberate scale.
+- **The ask** — currently: *"WhatsApp me today to confirm and coordinate
+  pickup."* Change the copy in the `html` and `text` variables inside
+  `buildPickupReminderEmail()` if you want different phrasing.
 - **Send time** — change `.atHour(8)` in `setupTriggers()` to send earlier
   or later.
+- After any change, run `testPickupReminderEmail()` again to see it land
+  in your inbox for real before trusting it to go out to borrowers.

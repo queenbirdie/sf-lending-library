@@ -1,19 +1,25 @@
 # Pickup reminder emails — setup
 
-New: borrowers now get an automatic reminder email at **8am the morning
-before their pickup**, asking them to WhatsApp you to confirm the time
-and coordinate. It covers all their items in one email if they're picking up
-more than one thing, and it's styled to match the site's card-catalog look
-(cream background, typewriter font, red rubber-stamp "Pickup Tomorrow"
-badge, per-library shelf color) instead of a generic modern template.
+New: borrowers now get an automatic reminder email the morning before their
+pickup, asking them to WhatsApp you to confirm the time and coordinate. It
+covers all their items in one email if they're picking up more than one
+thing, and it's styled to match the site's card-catalog look (cream
+background, typewriter font, red rubber-stamp "Pickup Tomorrow" badge,
+per-library shelf color) instead of a generic modern template.
 
-This lives in `Code.js` as a new function, `sendPickupReminders()`, plus one
-new trigger line. `CODE_GS_RESTORE.md` has been updated with the full,
+This lives in `Code.js` as a new function, `sendPickupReminders()`, plus two
+new trigger lines. `CODE_GS_RESTORE.md` has been updated with the full,
 correct contents of `Code.js` including this feature baked in.
 
 ## How it works
 
-- Runs daily at 8am (same pattern as the existing `nightlyAudit` trigger).
+- Runs twice daily: **8am** (same pattern as the existing `nightlyAudit`
+  trigger) and **4pm** as a catch-all. The 4pm run exists because a
+  reservation confirmed after the 8am run — for a pickup happening
+  tomorrow — would otherwise never get a reminder, since by the next 8am
+  run "tomorrow" has already moved past it. Both runs call the exact same
+  function; the second is purely a safety net for late confirmations, not
+  a second email — see the idempotency note below.
 - Looks at the `reservations` tab for rows where pickup date = tomorrow and
   status is `Confirmed` or `Added to existing request`.
 - Groups by borrower (so one person picking up 3 things gets 1 email, not 3).
@@ -25,17 +31,22 @@ correct contents of `Code.js` including this feature baked in.
   copy uses `Courier New` — a universally-supported monospace fallback for
   the site's `Special Elite`/`Courier Prime` fonts, since custom web fonts
   aren't reliable in email clients.
-- Subject line is plain text (no emoji) — emoji in subjects can trigger
-  encoding/spam-filter quirks in some Gmail configurations, so it's
-  deliberately left out here.
+- Subject line: `Reminder: [Library Full Name] pickup tomorrow` (e.g.
+  "Reminder: Party Supplies Lending Library pickup tomorrow") — plain text,
+  no emoji, since emoji in subjects can trigger encoding/spam-filter quirks
+  in some Gmail configurations.
 - Includes a checklist-style call-to-action (☐, matching the calendar-invite
   checklist style) with a tappable `wa.me` WhatsApp link — all borrower
   communication funnels to WhatsApp now, no more "text or WhatsApp."
 - The pickup date and time (if set) are stated together in the very first
   line, so it's readable at a glance without hunting further down.
 - You're bcc'd on every reminder, same as the receipt/confirmation emails.
-- Idempotent — records what it's sent in Script Properties, so re-running it
-  the same day won't double-send even if the trigger fires twice.
+- **Idempotent** — records what it's sent (keyed by library + borrower +
+  pickup time + day) in Script Properties, so re-running it the same day —
+  whether that's the 8am run, the 4pm catch-all, or a manual re-run — sends
+  at most one email per group. This is what makes running it twice a day
+  safe: whichever run finds a confirmed reservation first sends it, and the
+  other one just sees it's already been sent and skips it.
 
 ## To install
 
@@ -69,10 +80,11 @@ patch in these three pieces instead:
    shared by the real sender and the test function, so the two can never
    drift out of sync.
 
-3. **Add one line to `setupTriggers()`**, next to the other daily triggers:
+3. **Add two lines to `setupTriggers()`**, next to the other daily triggers:
 
    ```javascript
    ScriptApp.newTrigger('sendPickupReminders').timeBased().everyDays(1).atHour(8).create();
+   ScriptApp.newTrigger('sendPickupReminders').timeBased().everyDays(1).atHour(16).create(); // catch-all for reservations confirmed after the 8am run
    ```
 
 ## Preview it for real
@@ -92,9 +104,9 @@ at the top of the function to preview a different library's shelf color.
 
 ## Activate it today
 
-`setupTriggers()` already reruns itself every day at 3am, so the new trigger
-will install itself automatically overnight. To turn it on **right now**
-instead of waiting:
+`setupTriggers()` already reruns itself every day at 3am, so the new
+triggers will install themselves automatically overnight. To turn them on
+**right now** instead of waiting:
 
 1. In the Apps Script editor, pick `setupTriggers` from the function
    dropdown at the top.

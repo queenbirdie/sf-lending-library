@@ -504,9 +504,7 @@ function buildPickupReminderEmail(firstName, lib, deco, pickupFmt, time, items) 
   var waLink = pickupReminderWhatsAppLink(lib.phone);
   var whenText = time ? (pickupFmt + ' at ' + time) : pickupFmt;
   var timeNote = time ? '' : ' — time still to be confirmed';
-  var subject = time
-    ? 'Pickup tomorrow at ' + time + ' — ' + lib.shortName
-    : 'Pickup tomorrow — ' + lib.shortName + ' (time TBD)';
+  var subject = 'Reminder: ' + lib.name + ' pickup tomorrow';
   var itemListHtml = items.map(function(i) { return '<div style="padding:3px 0;">• ' + i + '</div>'; }).join('');
   var html =
     '<div style="font-family: \'Courier New\', Courier, monospace; font-size: ' + REMINDER_FS_BASE + '; line-height: 1.6; max-width: 480px; margin: 0 auto; background:#F3ECDC; padding: 28px 16px;">' +
@@ -530,8 +528,7 @@ function buildPickupReminderEmail(firstName, lib, deco, pickupFmt, time, items) 
           '<span style="display:inline-block; width:14px; height:14px; line-height:12px; text-align:center; border:2px solid ' + REMINDER_STAMP_COLOR + '; border-radius:3px; font-size:32px; font-weight:bold; color:' + REMINDER_STAMP_COLOR + '; margin-right:16px; vertical-align:middle;">&#10003;</span>' +
           '<a href="' + waLink + '" style="color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">WhatsApp me</a> today to confirm and coordinate pickup.' +
         '</div>' +
-        '<p style="font-size: ' + REMINDER_FS_BASE + '; color:#4E5A6B; margin:0 0 6px;">Address &amp; parking details are in your calendar invite.</p>' +
-        '<p style="font-size: ' + REMINDER_FS_BASE + '; color:#4E5A6B; margin:0 0 16px;">Questions? <a href="https://www.sflendinglibrary.org" style="color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">www.sflendinglibrary.org</a></p>' +
+        '<p style="font-size: ' + REMINDER_FS_BASE + '; color:#4E5A6B; margin:0 0 16px;">Address &amp; parking details are in your calendar invite. Questions? <a href="https://www.sflendinglibrary.org" style="color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">www.sflendinglibrary.org</a></p>' +
         '<p style="font-size: ' + REMINDER_FS_BASE + '; color:#1F2C3D; margin:0;">See you soon!<br>Lauren</p>' +
       '</div>' +
       '<div style="text-align:center; margin-top: 18px;">' +
@@ -546,8 +543,7 @@ function buildPickupReminderEmail(firstName, lib, deco, pickupFmt, time, items) 
     'CHECKED OUT\n' + items.map(function(i) { return '- ' + i; }).join('\n') + '\n\n' +
     'TO DO\n' +
     '[ ] WhatsApp me at ' + lib.phone + ' today to confirm and coordinate pickup: ' + waLink + '\n\n' +
-    'Address & parking details are in your calendar invite.\n\n' +
-    'Questions? www.sflendinglibrary.org\n\n' +
+    'Address & parking details are in your calendar invite. Questions? www.sflendinglibrary.org\n\n' +
     'See you soon!\nLauren';
   return { subject: subject, html: html, text: text };
 }
@@ -1100,6 +1096,7 @@ function setupTriggers() {
   ScriptApp.newTrigger('nightlyAudit').timeBased().everyDays(1).atHour(8).create();
   ScriptApp.newTrigger('dailyScheduleEmail').timeBased().everyDays(1).atHour(19).create();
   ScriptApp.newTrigger('sendPickupReminders').timeBased().everyDays(1).atHour(8).create();
+  ScriptApp.newTrigger('sendPickupReminders').timeBased().everyDays(1).atHour(16).create(); // catch-all for reservations confirmed after the 8am run
   ScriptApp.newTrigger('setupTriggers').timeBased().everyDays(1).atHour(3).create();
   Logger.log('Triggers installed.');
 }

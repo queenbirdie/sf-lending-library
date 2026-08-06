@@ -553,6 +553,9 @@ function sendPickupReminders() {
   var rows  = sheet.getDataRange().getValues().slice(1);
   var tz    = Session.getScriptTimeZone();
   var props = PropertiesService.getScriptProperties();
+  // The next calendar date, not "24 hours from now" — this is why the 8am
+  // and 4pm runs always agree on what "tomorrow" is and the copy stays
+  // accurate regardless of which run actually sends the email.
   var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(0, 0, 0, 0);
   function isTomorrow(d) {
     var dt = d instanceof Date ? d : new Date(d); dt.setHours(0, 0, 0, 0);

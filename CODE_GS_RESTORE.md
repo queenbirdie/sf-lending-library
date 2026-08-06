@@ -525,9 +525,7 @@ function buildPickupReminderEmail(firstName, lib, deco, pickupFmt, time, items) 
         '</div>' +
         '<div style="font-size: ' + REMINDER_FS_XS + '; text-transform:uppercase; letter-spacing:1px; color:' + REMINDER_STAMP_COLOR + '; margin-bottom:8px; font-weight:bold;">To Do</div>' +
         '<div style="border-left: 3px solid ' + REMINDER_STAMP_COLOR + '; background:#F7E4E0; padding: 12px 16px; margin: 0 0 18px; border-radius: 2px; color:#1F2C3D; font-size: ' + REMINDER_FS_BASE + ';">' +
-          '<span style="display:inline-block; position:relative; width:24px; height:24px; border:2px solid ' + REMINDER_STAMP_COLOR + '; border-radius:4px; margin-right:10px; vertical-align:middle;">' +
-            '<span style="position:absolute; left:8px; top:4px; width:5px; height:10px; border-bottom:3px solid ' + REMINDER_STAMP_COLOR + '; border-right:3px solid ' + REMINDER_STAMP_COLOR + '; transform:rotate(45deg);"></span>' +
-          '</span>' +
+          '<table role="presentation" cellpadding="0" cellspacing="0" style="display:inline-block; vertical-align:middle; margin-right:10px;"><tr><td style="width:20px; height:20px; border:2px solid ' + REMINDER_STAMP_COLOR + '; border-radius:4px; text-align:center; vertical-align:middle; font-size:15px; line-height:1; font-weight:bold; color:' + REMINDER_STAMP_COLOR + ';">&#10003;</td></tr></table>' +
           '<a href="' + waLink + '" style="color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">WhatsApp me</a> today to confirm and coordinate pickup.' +
         '</div>' +
         '<p style="font-size: ' + REMINDER_FS_BASE + '; color:#4E5A6B; margin:0 0 16px;">Address &amp; parking details are in your calendar invite. Questions? <a href="https://www.sflendinglibrary.org" style="color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">www.sflendinglibrary.org</a></p>' +

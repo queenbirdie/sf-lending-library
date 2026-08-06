@@ -525,7 +525,7 @@ function buildPickupReminderEmail(firstName, lib, deco, pickupFmt, time, items) 
         '</div>' +
         '<div style="font-size: ' + REMINDER_FS_XS + '; text-transform:uppercase; letter-spacing:1px; color:' + REMINDER_STAMP_COLOR + '; margin-bottom:8px; font-weight:bold;">To Do</div>' +
         '<div style="border-left: 3px solid ' + REMINDER_STAMP_COLOR + '; background:#F7E4E0; padding: 12px 16px; margin: 0 0 18px; border-radius: 2px; color:#1F2C3D; font-size: ' + REMINDER_FS_BASE + ';">' +
-          '<span style="display:inline-block; width:14px; height:14px; line-height:12px; text-align:center; border:2px solid ' + REMINDER_STAMP_COLOR + '; border-radius:3px; font-size:32px; font-weight:bold; color:' + REMINDER_STAMP_COLOR + '; margin-right:16px; vertical-align:middle;">&#10003;</span>' +
+          '<span style="display:inline-block; width:22px; height:22px; line-height:20px; text-align:center; border:2px solid ' + REMINDER_STAMP_COLOR + '; border-radius:4px; font-size:20px; font-weight:bold; color:' + REMINDER_STAMP_COLOR + '; margin-right:10px; vertical-align:middle;">&#10003;</span>' +
           '<a href="' + waLink + '" style="color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">WhatsApp me</a> today to confirm and coordinate pickup.' +
         '</div>' +
         '<p style="font-size: ' + REMINDER_FS_BASE + '; color:#4E5A6B; margin:0 0 16px;">Address &amp; parking details are in your calendar invite. Questions? <a href="https://www.sflendinglibrary.org" style="color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">www.sflendinglibrary.org</a></p>' +

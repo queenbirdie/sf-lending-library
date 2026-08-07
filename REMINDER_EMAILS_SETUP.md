@@ -139,6 +139,11 @@ reminders. A few things you might want to tweak:
   `REMINDER_STAMP_COLOR` (the red stamp/accent) at the top.
 - **Text sizes** — `REMINDER_FS_XS` / `REMINDER_FS_BASE` / `REMINDER_FS_STAMP`,
   also at the top, so the whole email stays on one deliberate scale.
+- **Return care instructions** — `RETURN_CARE_ITEMS`, just above
+  `buildReminderEmail()`, is the "Before You Return" checklist (piece
+  counts, stray parts, wipe-downs, packing things back the way they
+  arrived). It only shows up on the return reminder — edit the array to
+  change what's asked, or add/remove lines.
 - **The ask** — currently: *"WhatsApp me today to confirm and coordinate
   pickup."* / *"...your return."* Change the copy in the `html` and `text`
   variables inside `buildReminderEmail()` if you want different phrasing —

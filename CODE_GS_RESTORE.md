@@ -505,6 +505,16 @@ function reminderWhatsAppLink(phone) {
 // formatted (e.g. 'Friday, August 7'); time is that leg's requested time
 // window (pickup time for kind='pickup', return time for kind='return'),
 // or '' if not yet set.
+// Care instructions shown only on the return reminder — the "leave it as
+// good as you found it" ask (piece counts, accompanying parts, wipe-downs,
+// packed the way it arrived). Kept out of the pickup reminder entirely.
+var RETURN_CARE_ITEMS = [
+  'Count the pieces — puzzles and games go back with everything included',
+  'Double-check for stray parts (clips, chargers, small accessories) so nothing gets left behind',
+  'Give anything dirty a wipe, especially stuff that touched food (yes, that means the high chair clips)',
+  'Pack it up the way it arrived — folded neatly, nothing tucked inside something else (easy for me to miss when I\'m putting things away!)'
+];
+
 function buildReminderEmail(kind, firstName, lib, deco, dateFmt, time, items) {
   var isPickup = kind === 'pickup';
   var verb = isPickup ? 'pickup' : 'return';
@@ -516,6 +526,14 @@ function buildReminderEmail(kind, firstName, lib, deco, dateFmt, time, items) {
   var timeNote = time ? '' : ' — time still to be confirmed';
   var subject = 'Reminder: ' + lib.name + ' ' + verb + ' tomorrow';
   var itemListHtml = items.map(function(i) { return '<div style="padding:3px 0;">• ' + i + '</div>'; }).join('');
+  var careHtml = isPickup ? '' :
+    '<div style="margin-top:14px;">' +
+      '<div style="font-size: ' + REMINDER_FS_XS + '; text-transform:uppercase; letter-spacing:1px; color:' + REMINDER_STAMP_COLOR + '; margin-bottom:8px; font-weight:bold;">Before You Return</div>' +
+      '<div style="font-size: ' + REMINDER_FS_BASE + '; color:#1F2C3D;">' +
+        RETURN_CARE_ITEMS.map(function(i) { return '<div style="padding:3px 0;">• ' + i + '</div>'; }).join('') +
+      '</div>' +
+      '<div style="font-size: ' + REMINDER_FS_XS + '; color:#8A97A6; font-style:italic; margin-top:8px;">Basically: leave it as good as you found it — or better.</div>' +
+    '</div>';
   var html =
     '<div style="font-family: \'Courier New\', Courier, monospace; font-size: ' + REMINDER_FS_BASE + '; line-height: 1.6; max-width: 480px; margin: 0 auto; background:#F3ECDC; padding: 28px 16px;">' +
       '<div style="text-align:center; margin-bottom: 20px;">' +
@@ -532,6 +550,7 @@ function buildReminderEmail(kind, firstName, lib, deco, dateFmt, time, items) {
         '<div style="border-top: 1px dashed #E3D9BF; border-bottom: 1px dashed #E3D9BF; padding: 14px 0; margin: 0 0 16px;">' +
           '<div style="font-size: ' + REMINDER_FS_XS + '; text-transform:uppercase; letter-spacing:1px; color:' + REMINDER_STAMP_COLOR + '; margin-bottom:8px; font-weight:bold;">' + itemsLabel + '</div>' +
           '<div style="font-size: ' + REMINDER_FS_BASE + '; color:#1F2C3D;">' + itemListHtml + '</div>' +
+          careHtml +
         '</div>' +
         '<div style="font-size: ' + REMINDER_FS_XS + '; text-transform:uppercase; letter-spacing:1px; color:' + REMINDER_STAMP_COLOR + '; margin-bottom:8px; font-weight:bold;">To Do</div>' +
         '<div style="border-left: 3px solid ' + REMINDER_STAMP_COLOR + '; background:#F7E4E0; padding: 12px 16px; margin: 0 0 18px; border-radius: 2px; color:#1F2C3D; font-size: ' + REMINDER_FS_BASE + ';">' +
@@ -545,12 +564,16 @@ function buildReminderEmail(kind, firstName, lib, deco, dateFmt, time, items) {
         '<div style="font-size: ' + REMINDER_FS_XS + '; letter-spacing: 2px; text-transform: uppercase; color:#8A97A6;"><span style="text-decoration: line-through; opacity: 0.65;">Buy</span> &middot; Borrow &middot; Return &middot; Repeat</div>' +
       '</div>' +
     '</div>';
+  var careText = isPickup ? '' :
+    '\nBEFORE YOU RETURN\n' + RETURN_CARE_ITEMS.map(function(i) { return '- ' + i; }).join('\n') +
+    '\n(Basically: leave it as good as you found it — or better.)\n';
   var text =
     '✦ SF LENDING LIBRARY ✦\n\n' +
     stampText.toUpperCase() + '\n\n' +
     'Hi ' + firstName + ',\n\n' +
     'Quick reminder — your ' + lib.shortName + ' ' + verb + ' is tomorrow, ' + whenText + timeNote + '.\n\n' +
-    itemsLabel.toUpperCase() + '\n' + items.map(function(i) { return '- ' + i; }).join('\n') + '\n\n' +
+    itemsLabel.toUpperCase() + '\n' + items.map(function(i) { return '- ' + i; }).join('\n') + '\n' +
+    careText + '\n' +
     'TO DO\n' +
     '[ ] WhatsApp me at ' + lib.phone + ' today to confirm and coordinate ' + ctaVerb + ': ' + waLink + '\n\n' +
     'Address & parking details are in your calendar invite. Questions? www.sflendinglibrary.org\n\n' +

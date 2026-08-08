@@ -74,6 +74,7 @@ const COL_IMAGE_URL      = 7;  // H
 const COL_LINK           = 8;  // I
 const COL_CURRENTLY_HAVE = 9;  // J (ACTIVE)
 const COL_QTY            = 10; // K
+const COL_CARE_TAGS      = 11; // L — optional, comma-separated (see CARE_GUIDELINES)
 
 // ── Reservations columns (1-based) ───────
 // A=Library, B=Timestamp, C=Name, D=Email, E=Phone, F=Item ID, G=Brand, H=Item Name,
@@ -156,6 +157,18 @@ function getItemSize(itemName, libraryKey, invRows) {
     }
   }
   return '';
+}
+
+// Comma-separated tags from the inventory sheet's Care Tags column (e.g.
+// "food, parts"), split into a clean array. See CARE_GUIDELINES for the
+// recognized tags and what each renders as on the return reminder.
+function getItemCareTags(itemName, libraryKey, invRows) {
+  for (var i = 1; i < invRows.length; i++) {
+    if (String(invRows[i][COL_ITEM]).trim() === itemName && libraryMatches(invRows[i][COL_LIBRARY], libraryKey)) {
+      return String(invRows[i][COL_CARE_TAGS] || '').split(',').map(function(t) { return t.trim(); }).filter(Boolean);
+    }
+  }
+  return [];
 }
 
 function getItemImageUrl(itemName, libraryKey, invRows) {
@@ -505,18 +518,27 @@ function reminderWhatsAppLink(phone) {
 // formatted (e.g. 'Friday, August 7'); time is that leg's requested time
 // window (pickup time for kind='pickup', return time for kind='return'),
 // or '' if not yet set.
-// Care instructions shown only on the return reminder — the "leave it as
-// good as you found it" ask (piece counts, accompanying parts, wipe-downs,
-// packed the way it arrived). Kept out of the pickup reminder entirely.
-var RETURN_CARE_ITEMS = [
-  'Count the pieces — puzzles and games go back with everything included',
-  'Double-check for stray parts (clips, chargers, small accessories) so nothing gets left behind',
-  'Give anything dirty a wipe, especially stuff that touched food (yes, that means the high chair clips)',
-  'Pack it up the way it arrived — folded neatly, nothing tucked inside something else (easy for me to miss when I\'m putting things away!)'
+// Care instructions shown on the return reminder — only the ones relevant
+// to what's actually being returned, driven by each inventory item's Care
+// Tags column (comma-separated, e.g. "food, parts"). Add a tag here and to
+// items in the sheet to introduce a new guideline; items with no tags
+// simply don't add any bullets, and the closing line always shows.
+var CARE_GUIDELINES = [
+  { tag: 'pieces', text: 'Count the pieces — this one goes back with everything included' },
+  { tag: 'parts',  text: 'Double-check for stray parts (clips, chargers, small accessories) so nothing gets left behind' },
+  { tag: 'food',   text: 'Give it a wipe — this one often touches food' },
+  { tag: 'fold',   text: 'Pack it up the way it arrived — folded neatly, nothing tucked inside something else (easy for me to miss when I\'m putting things away!)' }
 ];
 
-function buildReminderEmail(kind, firstName, lib, deco, dateFmt, time, items) {
+// Resolves a set of collected tags (e.g. {food: true, parts: true}) to the
+// matching guideline text, in CARE_GUIDELINES' fixed order, deduped.
+function careGuidelinesForTags(tagSet) {
+  return CARE_GUIDELINES.filter(function(g) { return tagSet[g.tag]; }).map(function(g) { return g.text; });
+}
+
+function buildReminderEmail(kind, firstName, lib, deco, dateFmt, time, items, careItems) {
   var isPickup = kind === 'pickup';
+  careItems = careItems || [];
   var verb = isPickup ? 'pickup' : 'return';
   var stampText = isPickup ? 'Pickup Tomorrow' : 'Return Tomorrow';
   var itemsLabel = isPickup ? 'Checked Out' : 'Returning';
@@ -526,12 +548,11 @@ function buildReminderEmail(kind, firstName, lib, deco, dateFmt, time, items) {
   var timeNote = time ? '' : ' — time still to be confirmed';
   var subject = 'Reminder: ' + lib.name + ' ' + verb + ' tomorrow';
   var itemListHtml = items.map(function(i) { return '<div style="padding:3px 0;">• ' + i + '</div>'; }).join('');
+  var careBulletsHtml = careItems.map(function(i) { return '<div style="padding:3px 0;">• ' + i + '</div>'; }).join('');
   var careHtml = isPickup ? '' :
     '<div style="margin-top:14px;">' +
       '<div style="font-size: ' + REMINDER_FS_XS + '; text-transform:uppercase; letter-spacing:1px; color:' + REMINDER_STAMP_COLOR + '; margin-bottom:8px; font-weight:bold;">Before You Return</div>' +
-      '<div style="font-size: ' + REMINDER_FS_BASE + '; color:#1F2C3D;">' +
-        RETURN_CARE_ITEMS.map(function(i) { return '<div style="padding:3px 0;">• ' + i + '</div>'; }).join('') +
-      '</div>' +
+      (careBulletsHtml ? '<div style="font-size: ' + REMINDER_FS_BASE + '; color:#1F2C3D;">' + careBulletsHtml + '</div>' : '') +
       '<div style="font-size: ' + REMINDER_FS_XS + '; color:#8A97A6; font-style:italic; margin-top:8px;">Basically: leave it as good as you found it — or better.</div>' +
     '</div>';
   var html =
@@ -565,8 +586,8 @@ function buildReminderEmail(kind, firstName, lib, deco, dateFmt, time, items) {
       '</div>' +
     '</div>';
   var careText = isPickup ? '' :
-    '\nBEFORE YOU RETURN\n' + RETURN_CARE_ITEMS.map(function(i) { return '- ' + i; }).join('\n') +
-    '\n(Basically: leave it as good as you found it — or better.)\n';
+    '\nBEFORE YOU RETURN\n' + (careItems.length ? careItems.map(function(i) { return '- ' + i; }).join('\n') + '\n' : '') +
+    '(Basically: leave it as good as you found it — or better.)\n';
   var text =
     '✦ SF LENDING LIBRARY ✦\n\n' +
     stampText.toUpperCase() + '\n\n' +
@@ -634,8 +655,10 @@ function sendPickupReminders() {
 }
 
 function sendReturnReminders() {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(RSVP_TAB);
   var rows  = sheet.getDataRange().getValues().slice(1);
+  var invRows = ss.getSheetByName(INV_TAB).getDataRange().getValues();
   var tz    = Session.getScriptTimeZone();
   var props = PropertiesService.getScriptProperties();
   var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(0, 0, 0, 0);
@@ -651,7 +674,9 @@ function sendReturnReminders() {
     if (qty > 1) label += ' x' + qty;
     return label;
   }
-  // Group by borrower + library + return time so one email covers all their items
+  // Group by borrower + library + return time so one email covers all their
+  // items, collecting the union of care tags across every item in the group
+  // so the "Before You Return" section only shows what's actually relevant.
   var groups = {}, order = [];
   rows.forEach(function(r) {
     var status = String(r[15]).trim();
@@ -663,9 +688,11 @@ function sendReturnReminders() {
     var key = libraryKey + '|' + email + '|' + String(r[13] || '').trim();
     if (!groups[key]) {
       order.push(key);
-      groups[key] = { library: libraryKey, name: String(r[2]).trim(), email: email, time: String(r[13] || '').trim(), items: [] };
+      groups[key] = { library: libraryKey, name: String(r[2]).trim(), email: email, time: String(r[13] || '').trim(), items: [], careTags: {} };
     }
     groups[key].items.push(itemLabel(r));
+    var itemName = String(r[7]).trim();
+    getItemCareTags(itemName, libraryKey, invRows).forEach(function(tag) { groups[key].careTags[tag] = true; });
   });
   var returnFmt = Utilities.formatDate(tomorrow, tz, 'EEEE, MMMM d');
   var todayFmt = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
@@ -676,7 +703,8 @@ function sendReturnReminders() {
     var lib = getLibrary(g.library);
     var deco = REMINDER_DECOR[g.library] || REMINDER_DECOR['kid-gear'];
     var firstName = g.name.split(' ')[0];
-    var email = buildReminderEmail('return', firstName, lib, deco, returnFmt, g.time, g.items);
+    var careItems = careGuidelinesForTags(g.careTags);
+    var email = buildReminderEmail('return', firstName, lib, deco, returnFmt, g.time, g.items, careItems);
     GmailApp.sendEmail(g.email, email.subject, email.text, { htmlBody: email.html, bcc: Session.getEffectiveUser().getEmail() });
     props.setProperty(sentKey, 'sent');
   });
@@ -699,6 +727,9 @@ function testPickupReminderEmail() {
   Logger.log('Test pickup reminder sent to ' + Session.getEffectiveUser().getEmail());
 }
 
+// Uses real inventory Care Tags for the sample items below — a quick way to
+// confirm your tagging is actually producing the guidelines you expect.
+// Change itemNames/libraryKey to preview a different item's real tags.
 function testReturnReminderEmail() {
   var libraryKey = 'party';
   var lib = getLibrary(libraryKey);
@@ -706,9 +737,13 @@ function testReturnReminderEmail() {
   var tz = Session.getScriptTimeZone();
   var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
   var returnFmt = Utilities.formatDate(tomorrow, tz, 'EEEE, MMMM d');
-  var email = buildReminderEmail('return', 'Maria', lib, deco, returnFmt, '4pm - 6pm', ['Bubble Machine (Little Tikes)', 'Balloon Arch Kit']);
+  var itemNames = ['Bubble Machine', 'Balloon Arch Kit'];
+  var invRows = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(INV_TAB).getDataRange().getValues();
+  var careTags = {};
+  itemNames.forEach(function(name) { getItemCareTags(name, libraryKey, invRows).forEach(function(tag) { careTags[tag] = true; }); });
+  var email = buildReminderEmail('return', 'Maria', lib, deco, returnFmt, '4pm - 6pm', ['Bubble Machine (Little Tikes)', 'Balloon Arch Kit'], careGuidelinesForTags(careTags));
   GmailApp.sendEmail(Session.getEffectiveUser().getEmail(), '[TEST] ' + email.subject, email.text, { htmlBody: email.html });
-  Logger.log('Test return reminder sent to ' + Session.getEffectiveUser().getEmail());
+  Logger.log('Test return reminder sent to ' + Session.getEffectiveUser().getEmail() + ' — care tags found: ' + JSON.stringify(careTags));
 }
 
 function sendPendingReceipts() {

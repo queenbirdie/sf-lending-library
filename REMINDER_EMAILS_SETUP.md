@@ -148,10 +148,10 @@ optional **Care Tags** column on the `inventory` sheet.
    |---|---|
    | `pieces` | Count the pieces — this one goes back with everything included |
    | `parts` | Double-check for stray parts (clips, chargers, small accessories) so nothing gets left behind |
-   | `food` | Give it a wipe — this one often touches food |
+   | `clean` | Give it a wipe — anything that touched food, mouths, or skin should get cleaned before it comes back |
    | `fold` | Pack it up the way it arrived — folded neatly, nothing tucked inside something else |
 
-   Example: an Inglesina clip-on high chair might get `food, parts`; a
+   Example: an Inglesina clip-on high chair might get `clean, parts`; a
    jigsaw puzzle might get `pieces`; a pack-and-play might get `fold,
    parts`. Leave the cell blank for anything with nothing special to call
    out — no guidelines show for that item, and if *no* item in a return has

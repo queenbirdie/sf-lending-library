@@ -130,6 +130,47 @@ triggers will install themselves automatically overnight. To turn them on
 No deploy needed — these are time-driven triggers, not part of the web app
 endpoints, so nothing on the live site changes.
 
+## Tagging items for return care instructions
+
+The return reminder's "Before You Return" section only shows guidelines
+relevant to what's actually being returned — someone returning a single
+puzzle won't be told to wipe down high chair clips. This is driven by an
+optional **Care Tags** column on the `inventory` sheet.
+
+**One-time setup:**
+
+1. In the `inventory` sheet, add a header in **column L** (right after
+   Qty) called `Care Tags`.
+2. For any item where a guideline applies, put a comma-separated list of
+   tags in that item's row. Recognized tags:
+
+   | Tag | Guideline shown |
+   |---|---|
+   | `pieces` | Count the pieces — this one goes back with everything included |
+   | `parts` | Double-check for stray parts (clips, chargers, small accessories) so nothing gets left behind |
+   | `food` | Give it a wipe — this one often touches food |
+   | `fold` | Pack it up the way it arrived — folded neatly, nothing tucked inside something else |
+
+   Example: an Inglesina clip-on high chair might get `food, parts`; a
+   jigsaw puzzle might get `pieces`; a pack-and-play might get `fold,
+   parts`. Leave the cell blank for anything with nothing special to call
+   out — no guidelines show for that item, and if *no* item in a return has
+   any tags, the section still shows just the closing "leave it as good as
+   you found it" line with no bullets.
+3. Nothing else needs to change — `sendReturnReminders()` already reads
+   this column, unions the tags across everything in a return, and shows
+   only the matching guidelines.
+
+You don't have to tag everything at once — untagged items simply don't add
+extra guidance, so this is safe to fill in gradually.
+
+**To check it's working:** run `testReturnReminderEmail()` (see "Preview it
+for real" above). It looks up real Care Tags for the sample item names set
+in that function (`itemNames`, near the top) — change those to real item
+names from your sheet, run it, and check the Apps Script execution log
+(`View → Executions` or the log panel after running) for a line like
+`care tags found: {"food":true,"parts":true}` confirming what it read.
+
 ## Customizing the message
 
 The wording and colors live inside `buildReminderEmail()`, shared by both
@@ -139,11 +180,12 @@ reminders. A few things you might want to tweak:
   `REMINDER_STAMP_COLOR` (the red stamp/accent) at the top.
 - **Text sizes** — `REMINDER_FS_XS` / `REMINDER_FS_BASE` / `REMINDER_FS_STAMP`,
   also at the top, so the whole email stays on one deliberate scale.
-- **Return care instructions** — `RETURN_CARE_ITEMS`, just above
-  `buildReminderEmail()`, is the "Before You Return" checklist (piece
-  counts, stray parts, wipe-downs, packing things back the way they
-  arrived). It only shows up on the return reminder — edit the array to
-  change what's asked, or add/remove lines.
+- **Return care guidelines** — which items get asked for what is controlled
+  by inventory tagging (see "Tagging items" above). To change the *wording*
+  of an existing guideline, or add a brand-new tag, edit `CARE_GUIDELINES`
+  just above `buildReminderEmail()` — each entry is `{ tag: '...', text:
+  '...' }`; a new tag also needs to be added to items' Care Tags cells in
+  the sheet to actually show up anywhere.
 - **The ask** — currently: *"WhatsApp me today to confirm and coordinate
   pickup."* / *"...your return."* Change the copy in the `html` and `text`
   variables inside `buildReminderEmail()` if you want different phrasing —

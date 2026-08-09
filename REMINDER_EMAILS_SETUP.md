@@ -162,10 +162,10 @@ optional **Care Tags** column on the `inventory` sheet.
    actual wash every time (clip-on high chair straps, sheets). Example: an
    Inglesina clip-on high chair might get `launder, parts`; a jigsaw puzzle
    might get `pieces`; a pack-and-play might get `fold, parts`. Leave the
-   cell blank for anything with nothing special to call
-   out — no guidelines show for that item, and if *no* item in a return has
-   any tags, the section still shows just the closing "leave it as good as
-   you found it" line with no bullets.
+   cell blank for anything with nothing special to call out — no
+   guidelines show for that item, and if a return is a single untagged
+   item, the whole "Before You Return" section is skipped entirely rather
+   than showing an empty label.
 3. Nothing else needs to change — `sendReturnReminders()` already reads
    this column, unions the tags across everything in a return, and shows
    only the matching guidelines.

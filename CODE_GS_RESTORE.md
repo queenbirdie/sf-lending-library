@@ -531,6 +531,7 @@ var CARE_GUIDELINES = [
   { tag: 'parts',  text: 'Double-check for stray parts (clips, chargers, small accessories) so nothing gets left behind' },
   { tag: 'spot-clean', text: 'Spot clean if it\'s dirty — if a wipe won\'t cut it, go ahead and launder it before returning' },
   { tag: 'launder', text: 'Launder before returning' },
+  { tag: 'disinfect', text: 'Clean and disinfect before returning' },
   { tag: 'fold',   text: 'Pack it up neatly, especially if it comes in any sort of carrying case' }
 ];
 

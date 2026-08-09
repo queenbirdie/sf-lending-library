@@ -559,11 +559,10 @@ function buildReminderEmail(kind, firstName, lib, deco, dateFmt, time, items, ca
     : '';
   var careBulletItems = multiItemNote ? careItems.concat([multiItemNote]) : careItems;
   var careBulletsHtml = careBulletItems.map(function(i) { return '<div style="padding:3px 0;">• ' + i + '</div>'; }).join('');
-  var careHtml = isPickup ? '' :
+  var careHtml = (isPickup || !careBulletsHtml) ? '' :
     '<div style="margin-top:14px;">' +
       '<div style="font-size: ' + REMINDER_FS_XS + '; text-transform:uppercase; letter-spacing:1px; color:' + REMINDER_STAMP_COLOR + '; margin-bottom:8px; font-weight:bold;">Before You Return</div>' +
-      (careBulletsHtml ? '<div style="font-size: ' + REMINDER_FS_BASE + '; color:#1F2C3D;">' + careBulletsHtml + '</div>' : '') +
-      '<div style="font-size: ' + REMINDER_FS_XS + '; color:#8A97A6; font-style:italic; margin-top:8px;">Basically: leave it as good as you found it — or better.</div>' +
+      '<div style="font-size: ' + REMINDER_FS_BASE + '; color:#1F2C3D;">' + careBulletsHtml + '</div>' +
     '</div>';
   var html =
     '<div style="font-family: \'Courier New\', Courier, monospace; font-size: ' + REMINDER_FS_BASE + '; line-height: 1.6; max-width: 480px; margin: 0 auto; background:#F3ECDC; padding: 28px 16px;">' +
@@ -595,9 +594,8 @@ function buildReminderEmail(kind, firstName, lib, deco, dateFmt, time, items, ca
         '<div style="font-size: ' + REMINDER_FS_XS + '; letter-spacing: 2px; text-transform: uppercase; color:#8A97A6;"><span style="text-decoration: line-through; opacity: 0.65;">Buy</span> &middot; Borrow &middot; Return &middot; Repeat</div>' +
       '</div>' +
     '</div>';
-  var careText = isPickup ? '' :
-    '\nBEFORE YOU RETURN\n' + (careBulletItems.length ? careBulletItems.map(function(i) { return '- ' + i; }).join('\n') + '\n' : '') +
-    '(Basically: leave it as good as you found it — or better.)\n';
+  var careText = (isPickup || !careBulletItems.length) ? '' :
+    '\nBEFORE YOU RETURN\n' + careBulletItems.map(function(i) { return '- ' + i; }).join('\n') + '\n';
   var text =
     '✦ SF LENDING LIBRARY ✦\n\n' +
     stampText.toUpperCase() + '\n\n' +

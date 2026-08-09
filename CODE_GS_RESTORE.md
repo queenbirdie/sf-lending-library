@@ -521,14 +521,17 @@ function reminderWhatsAppLink(phone) {
 // Care instructions shown on the return reminder — only the ones relevant
 // to what's actually being returned, driven by each inventory item's Care
 // Tags column (comma-separated, e.g. "launder, parts"). Add a tag here and to
-// items in the sheet to introduce a new guideline; items with no tags
-// simply don't add any bullets, and the closing line always shows.
+// items in the sheet to introduce a new guideline; items with no tags don't
+// add any tag-driven bullets. Separately, a "keep items separate" bullet
+// shows automatically whenever a return covers more than one item — that
+// one isn't item-specific, so it's not a tag (see multiItemNote below).
+// The closing line always shows regardless of any of the above.
 var CARE_GUIDELINES = [
-  { tag: 'pieces', text: 'Count the pieces — this one goes back with everything included' },
+  { tag: 'pieces', text: 'Ensure you\'re returning with all puzzle/game pieces — for anything under 100 pieces, a manual count is appreciated' },
   { tag: 'parts',  text: 'Double-check for stray parts (clips, chargers, small accessories) so nothing gets left behind' },
   { tag: 'spot-clean', text: 'Spot clean if it\'s dirty — if a wipe won\'t cut it, go ahead and launder it before returning' },
-  { tag: 'launder', text: 'Please launder this before returning — it\'s in regular contact with food/mouths, so it needs a proper wash, not just a wipe' },
-  { tag: 'fold',   text: 'Pack it up the way it arrived — folded neatly, nothing tucked inside something else (easy for me to miss when I\'m putting things away!)' }
+  { tag: 'launder', text: 'Launder before returning' },
+  { tag: 'fold',   text: 'Pack it up neatly, especially if it comes in any sort of carrying case' }
 ];
 
 // Resolves a set of collected tags (e.g. {launder: true, parts: true}) to the
@@ -549,7 +552,13 @@ function buildReminderEmail(kind, firstName, lib, deco, dateFmt, time, items, ca
   var timeNote = time ? '' : ' — time still to be confirmed';
   var subject = 'Reminder: ' + lib.name + ' ' + verb + ' tomorrow';
   var itemListHtml = items.map(function(i) { return '<div style="padding:3px 0;">• ' + i + '</div>'; }).join('');
-  var careBulletsHtml = careItems.map(function(i) { return '<div style="padding:3px 0;">• ' + i + '</div>'; }).join('');
+  // Not item-specific, so it lives outside CARE_GUIDELINES/tags — shows
+  // whenever a return covers more than one item, regardless of what's tagged.
+  var multiItemNote = (!isPickup && items.length > 1)
+    ? 'Returning more than one item? Keep them separate — nothing tucked inside something else (easy for me to miss when I\'m putting things away!)'
+    : '';
+  var careBulletItems = multiItemNote ? careItems.concat([multiItemNote]) : careItems;
+  var careBulletsHtml = careBulletItems.map(function(i) { return '<div style="padding:3px 0;">• ' + i + '</div>'; }).join('');
   var careHtml = isPickup ? '' :
     '<div style="margin-top:14px;">' +
       '<div style="font-size: ' + REMINDER_FS_XS + '; text-transform:uppercase; letter-spacing:1px; color:' + REMINDER_STAMP_COLOR + '; margin-bottom:8px; font-weight:bold;">Before You Return</div>' +
@@ -587,7 +596,7 @@ function buildReminderEmail(kind, firstName, lib, deco, dateFmt, time, items, ca
       '</div>' +
     '</div>';
   var careText = isPickup ? '' :
-    '\nBEFORE YOU RETURN\n' + (careItems.length ? careItems.map(function(i) { return '- ' + i; }).join('\n') + '\n' : '') +
+    '\nBEFORE YOU RETURN\n' + (careBulletItems.length ? careBulletItems.map(function(i) { return '- ' + i; }).join('\n') + '\n' : '') +
     '(Basically: leave it as good as you found it — or better.)\n';
   var text =
     '✦ SF LENDING LIBRARY ✦\n\n' +

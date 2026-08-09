@@ -148,12 +148,16 @@ optional **Care Tags** column on the `inventory` sheet.
    |---|---|
    | `pieces` | Count the pieces — this one goes back with everything included |
    | `parts` | Double-check for stray parts (clips, chargers, small accessories) so nothing gets left behind |
-   | `clean` | Give it a wipe — anything that touched food, mouths, or skin should get cleaned before it comes back |
+   | `spot-clean` | Spot clean if it's dirty — if a wipe won't cut it, go ahead and launder it before returning |
+   | `launder` | Please launder this before returning — it's in regular contact with food/mouths, so it needs a proper wash, not just a wipe |
    | `fold` | Pack it up the way it arrived — folded neatly, nothing tucked inside something else |
 
-   Example: an Inglesina clip-on high chair might get `clean, parts`; a
-   jigsaw puzzle might get `pieces`; a pack-and-play might get `fold,
-   parts`. Leave the cell blank for anything with nothing special to call
+   `spot-clean` is for occasional-wipe items (bath tubs, bottle bags);
+   `launder` is for things in near-constant food/skin contact that need an
+   actual wash every time (clip-on high chair straps, sheets). Example: an
+   Inglesina clip-on high chair might get `launder, parts`; a jigsaw puzzle
+   might get `pieces`; a pack-and-play might get `fold, parts`. Leave the
+   cell blank for anything with nothing special to call
    out — no guidelines show for that item, and if *no* item in a return has
    any tags, the section still shows just the closing "leave it as good as
    you found it" line with no bullets.

@@ -151,6 +151,7 @@ optional **Care Tags** column on the `inventory` sheet.
    | `spot-clean` | Spot clean if it's dirty — if a wipe won't cut it, go ahead and launder it before returning |
    | `launder` | Launder before returning |
    | `disinfect` | Clean and disinfect before returning |
+   | `batteries` | Check that the batteries still work — swap in fresh ones before returning if not |
    | `fold` | Pack it up neatly, especially if it comes in any sort of carrying case |
 
    Separately (not a tag — it's automatic): any return with more than one
@@ -162,10 +163,12 @@ optional **Care Tags** column on the `inventory` sheet.
    `launder` is for things in near-constant food/skin contact that need an
    actual wash every time (clip-on high chair straps, sheets); `disinfect`
    is for hard-plastic bathroom items (travel potty) — cleaning, not
-   laundering. Example: an Inglesina clip-on high chair might get
-   `launder, parts`; a travel potty might get `disinfect`; a jigsaw puzzle
-   might get `pieces`; a pack-and-play might get `fold, parts`. Leave the
-   cell blank for anything with nothing special to call out — no
+   laundering; `batteries` is for anything battery-powered (sound machines,
+   scales, electronic toys). Example: an Inglesina clip-on high chair might
+   get `launder, parts`; a travel potty might get `disinfect`; a sound
+   machine might get `batteries`; a jigsaw puzzle might get `pieces`; a
+   pack-and-play might get `fold, parts`. Leave the cell blank for anything
+   with nothing special to call out — no
    guidelines show for that item, and if a return is a single untagged
    item, the whole "Before You Return" section is skipped entirely rather
    than showing an empty label.

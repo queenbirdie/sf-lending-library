@@ -532,6 +532,7 @@ var CARE_GUIDELINES = [
   { tag: 'spot-clean', text: 'Spot clean if it\'s dirty — if a wipe won\'t cut it, go ahead and launder it before returning' },
   { tag: 'launder', text: 'Launder before returning' },
   { tag: 'disinfect', text: 'Clean and disinfect before returning' },
+  { tag: 'batteries', text: 'Check that the batteries still work — swap in fresh ones before returning if not' },
   { tag: 'fold',   text: 'Pack it up neatly, especially if it comes in any sort of carrying case' }
 ];
 

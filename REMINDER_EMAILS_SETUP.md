@@ -150,6 +150,7 @@ optional **Care Tags** column on the `inventory` sheet.
    | `parts` | Double-check for stray parts (clips, chargers, small accessories) so nothing gets left behind |
    | `spot-clean` | Spot clean if it's dirty — if a wipe won't cut it, go ahead and launder it before returning |
    | `launder` | Launder before returning |
+   | `disinfect` | Clean and disinfect before returning |
    | `fold` | Pack it up neatly, especially if it comes in any sort of carrying case |
 
    Separately (not a tag — it's automatic): any return with more than one
@@ -159,8 +160,10 @@ optional **Care Tags** column on the `inventory` sheet.
 
    `spot-clean` is for occasional-wipe items (bath tubs, bottle bags);
    `launder` is for things in near-constant food/skin contact that need an
-   actual wash every time (clip-on high chair straps, sheets). Example: an
-   Inglesina clip-on high chair might get `launder, parts`; a jigsaw puzzle
+   actual wash every time (clip-on high chair straps, sheets); `disinfect`
+   is for hard-plastic bathroom items (travel potty) — cleaning, not
+   laundering. Example: an Inglesina clip-on high chair might get
+   `launder, parts`; a travel potty might get `disinfect`; a jigsaw puzzle
    might get `pieces`; a pack-and-play might get `fold, parts`. Leave the
    cell blank for anything with nothing special to call out — no
    guidelines show for that item, and if a return is a single untagged

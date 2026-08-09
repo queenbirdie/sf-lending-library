@@ -148,9 +148,8 @@ optional **Care Tags** column on the `inventory` sheet.
    |---|---|
    | `pieces` | Ensure you're returning with all puzzle/game pieces — for anything under 100 pieces, a manual count is appreciated |
    | `parts` | Double-check for stray parts (clips, chargers, small accessories) so nothing gets left behind |
-   | `spot-clean` | Spot clean if it's dirty — if a wipe won't cut it, go ahead and launder it before returning |
-   | `launder` | Launder before returning |
-   | `disinfect` | Clean and disinfect before returning |
+   | `spot-clean` | Spot clean if it's dirty — if a wipe won't cut it, go ahead and give it a proper wash before returning |
+   | `wash` | Clean, as appropriate, before returning — either in the laundry or dishwasher, or by disinfecting by hand |
    | `batteries` | Check that the batteries still work — swap in fresh ones before returning if not |
    | `fold` | Pack it up neatly, especially if it comes in any sort of carrying case |
 
@@ -160,15 +159,16 @@ optional **Care Tags** column on the `inventory` sheet.
    `buildReminderEmail()` if you want to change that wording.
 
    `spot-clean` is for occasional-wipe items (bath tubs, bottle bags);
-   `launder` is for things in near-constant food/skin contact that need an
-   actual wash every time (clip-on high chair straps, sheets); `disinfect`
-   is for hard-plastic bathroom items (travel potty) — cleaning, not
-   laundering; `batteries` is for anything battery-powered (sound machines,
-   scales, electronic toys). Example: an Inglesina clip-on high chair might
-   get `launder, parts`; a travel potty might get `disinfect`; a sound
-   machine might get `batteries`; a jigsaw puzzle might get `pieces`; a
-   pack-and-play might get `fold, parts`. Leave the cell blank for anything
-   with nothing special to call out — no
+   `wash` is for anything that needs an actual clean rather than a wipe —
+   fabric in regular food/mouth contact (clip-on high chair straps,
+   sheets), dishware (plates, bowls, cups), and hard-plastic bathroom
+   items (travel potty) all fall under it, whichever cleaning method fits;
+   `batteries` is for anything battery-powered (sound machines, scales,
+   electronic toys). Example: an Inglesina clip-on high chair might get
+   `wash, parts`; a travel potty might get `wash`; a sound machine might
+   get `batteries`; a jigsaw puzzle might get `pieces`; a pack-and-play
+   might get `fold, parts`. Leave the cell blank for anything with nothing
+   special to call out — no
    guidelines show for that item, and if a return is a single untagged
    item, the whole "Before You Return" section is skipped entirely rather
    than showing an empty label.

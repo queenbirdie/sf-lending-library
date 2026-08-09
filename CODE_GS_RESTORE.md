@@ -520,17 +520,18 @@ function reminderWhatsAppLink(phone) {
 // or '' if not yet set.
 // Care instructions shown on the return reminder — only the ones relevant
 // to what's actually being returned, driven by each inventory item's Care
-// Tags column (comma-separated, e.g. "clean, parts"). Add a tag here and to
+// Tags column (comma-separated, e.g. "launder, parts"). Add a tag here and to
 // items in the sheet to introduce a new guideline; items with no tags
 // simply don't add any bullets, and the closing line always shows.
 var CARE_GUIDELINES = [
   { tag: 'pieces', text: 'Count the pieces — this one goes back with everything included' },
   { tag: 'parts',  text: 'Double-check for stray parts (clips, chargers, small accessories) so nothing gets left behind' },
-  { tag: 'clean',  text: 'Give it a wipe — anything that touched food, mouths, or skin should get cleaned before it comes back' },
+  { tag: 'spot-clean', text: 'Spot clean if it\'s dirty — if a wipe won\'t cut it, go ahead and launder it before returning' },
+  { tag: 'launder', text: 'Please launder this before returning — it\'s in regular contact with food/mouths, so it needs a proper wash, not just a wipe' },
   { tag: 'fold',   text: 'Pack it up the way it arrived — folded neatly, nothing tucked inside something else (easy for me to miss when I\'m putting things away!)' }
 ];
 
-// Resolves a set of collected tags (e.g. {clean: true, parts: true}) to the
+// Resolves a set of collected tags (e.g. {launder: true, parts: true}) to the
 // matching guideline text, in CARE_GUIDELINES' fixed order, deduped.
 function careGuidelinesForTags(tagSet) {
   return CARE_GUIDELINES.filter(function(g) { return tagSet[g.tag]; }).map(function(g) { return g.text; });

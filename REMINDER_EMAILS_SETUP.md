@@ -146,11 +146,16 @@ optional **Care Tags** column on the `inventory` sheet.
 
    | Tag | Guideline shown |
    |---|---|
-   | `pieces` | Count the pieces — this one goes back with everything included |
+   | `pieces` | Ensure you're returning with all puzzle/game pieces — for anything under 100 pieces, a manual count is appreciated |
    | `parts` | Double-check for stray parts (clips, chargers, small accessories) so nothing gets left behind |
    | `spot-clean` | Spot clean if it's dirty — if a wipe won't cut it, go ahead and launder it before returning |
-   | `launder` | Please launder this before returning — it's in regular contact with food/mouths, so it needs a proper wash, not just a wipe |
-   | `fold` | Pack it up the way it arrived — folded neatly, nothing tucked inside something else |
+   | `launder` | Launder before returning |
+   | `fold` | Pack it up neatly, especially if it comes in any sort of carrying case |
+
+   Separately (not a tag — it's automatic): any return with more than one
+   item gets an extra "keep them separate, nothing tucked inside something
+   else" bullet, regardless of what's tagged. See `multiItemNote` inside
+   `buildReminderEmail()` if you want to change that wording.
 
    `spot-clean` is for occasional-wipe items (bath tubs, bottle bags);
    `launder` is for things in near-constant food/skin contact that need an

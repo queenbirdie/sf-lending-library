@@ -149,7 +149,7 @@ optional **Care Tags** column on the `inventory` sheet.
    | `pieces` | Ensure you're returning with all puzzle/game pieces — for anything under 100 pieces, a manual count is appreciated |
    | `parts` | Double-check for stray parts (clips, chargers, small accessories) so nothing gets left behind |
    | `spot-clean` | Spot clean if it's dirty — if a wipe won't cut it, go ahead and give it a proper wash before returning |
-   | `wash` | Clean, as appropriate, before returning — either in the laundry or dishwasher, or by disinfecting by hand |
+   | `wash` | Clean, as appropriate, before returning — either in the laundry or dishwasher, or disinfecting by hand |
    | `batteries` | Check that the batteries still work — swap in fresh ones before returning if not |
    | `fold` | Pack it up neatly, especially if it comes in any sort of carrying case |
 

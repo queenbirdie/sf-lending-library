@@ -23,6 +23,7 @@ const RSVP_TAB            = 'reservations';
 const FAQ_TAB              = 'faq';
 const BLACKOUT_TAB        = 'Blackout Dates';
 const BOOKING_WINDOW_DAYS = 90;
+const BOOKING_LEAD_DAYS   = 2; // earliest a pickup can be booked, in calendar days from today
 const CALENDAR_DAYS       = 60;
 const IMAGES_FOLDER_ID    = '1Zxh_fjMqklzbudaovuHsgPxZx5TK7sCE'; // root (fallback)
 
@@ -34,6 +35,21 @@ const LIBRARIES = [
   { key: 'puzzles',   tabAbbr: 'PG', shortName: 'Puzzles & Games',   name: 'Puzzles & Games Lending Library',      address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1--vhQGQEc9WnuKNkPM9YSdrsgd0Pundy' },
   { key: 'yoto',      tabAbbr: 'YT', shortName: 'Yoto',              name: 'Yoto Lending Library',                 address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1YquLATJiVLGYCQtDWjpOylH79mC8nBnH' },
 ];
+
+// ── Pickup reminder look & feel ──────────
+// Matches the site's card-catalog branding (assets/css/main.css): cream
+// background, navy ink, red rubber-stamp accent, per-library shelf color.
+const REMINDER_STAMP_COLOR = '#C0392B'; // --accent
+// Consistent type scale used throughout the reminder email — xs for
+// labels/fine print, base for all body copy, one larger size for the stamp.
+const REMINDER_FS_XS = '11px', REMINDER_FS_BASE = '14px', REMINDER_FS_STAMP = '13px';
+const REMINDER_DECOR = {
+  'kid-gear': { color: '#2E5FA3' },
+  'party':    { color: '#D9622B' },
+  'costumes': { color: '#6B4A8C' },
+  'puzzles':  { color: '#2F7A4F' },
+  'yoto':     { color: '#C77D18' }
+};
 
 function getLibrary(key) {
   return LIBRARIES.find(function(l) { return l.key === key; }) || LIBRARIES[0];
@@ -59,6 +75,7 @@ const COL_IMAGE_URL      = 7;  // H
 const COL_LINK           = 8;  // I
 const COL_CURRENTLY_HAVE = 9;  // J (ACTIVE)
 const COL_QTY            = 10; // K
+const COL_CARE_TAGS      = 11; // L — optional, comma-separated (see CARE_GUIDELINES)
 
 // ── Reservations columns (1-based) ───────
 // A=Library, B=Timestamp, C=Name, D=Email, E=Phone, F=Item ID, G=Brand, H=Item Name,
@@ -143,6 +160,18 @@ function getItemSize(itemName, libraryKey, invRows) {
   return '';
 }
 
+// Comma-separated tags from the inventory sheet's Care Tags column (e.g.
+// "food, parts"), split into a clean array. See CARE_GUIDELINES for the
+// recognized tags and what each renders as on the return reminder.
+function getItemCareTags(itemName, libraryKey, invRows) {
+  for (var i = 1; i < invRows.length; i++) {
+    if (String(invRows[i][COL_ITEM]).trim() === itemName && libraryMatches(invRows[i][COL_LIBRARY], libraryKey)) {
+      return String(invRows[i][COL_CARE_TAGS] || '').split(',').map(function(t) { return t.trim(); }).filter(Boolean);
+    }
+  }
+  return [];
+}
+
 function getItemImageUrl(itemName, libraryKey, invRows) {
   for (var i = 1; i < invRows.length; i++) {
     if (String(invRows[i][COL_ITEM]).trim() === itemName && libraryMatches(invRows[i][COL_LIBRARY], libraryKey)) {
@@ -173,7 +202,8 @@ function submitReservation(formData) {
     var returnDate = parseDateString(returnDateStr);
     if (returnDate <= pickupDate) return { success: false, message: 'Return date must be after pickup date.' };
     var today = new Date(); today.setHours(0,0,0,0);
-    if (pickupDate < today) return { success: false, message: 'Pickup date cannot be in the past.' };
+    var minPickup = new Date(today); minPickup.setDate(minPickup.getDate() + BOOKING_LEAD_DAYS);
+    if (pickupDate < minPickup) return { success: false, message: 'Pickup date must be at least ' + BOOKING_LEAD_DAYS + ' days from today.' };
     var maxPickup = new Date(today); maxPickup.setDate(maxPickup.getDate() + BOOKING_WINDOW_DAYS);
     if (pickupDate > maxPickup) return { success: false, message: 'Pickup date must be within ' + BOOKING_WINDOW_DAYS + ' days from today.' };
     var blackoutDates = getBlackoutDates();
@@ -477,6 +507,254 @@ function sendReceiptEmail(data, items, libraryKey) {
     'Questions? Just reply to this email.\n\n' +
     'Thanks,\nLauren';
   GmailApp.sendEmail(email, subject, body, { bcc: Session.getEffectiveUser().getEmail() });
+}
+
+function reminderWhatsAppLink(phone) {
+  var digits = String(phone).replace(/\D/g, '');
+  if (digits.length === 10) digits = '1' + digits;
+  return 'https://wa.me/' + digits;
+}
+
+// Shared template for both the pickup and return reminder emails.
+// kind: 'pickup' or 'return'. dateFmt is the tomorrow date already
+// formatted (e.g. 'Friday, August 7'); time is that leg's requested time
+// window (pickup time for kind='pickup', return time for kind='return'),
+// or '' if not yet set.
+// Care instructions shown on the return reminder — only the ones relevant
+// to what's actually being returned, driven by each inventory item's Care
+// Tags column (comma-separated, e.g. "launder, parts"). Add a tag here and to
+// items in the sheet to introduce a new guideline; items with no tags don't
+// add any tag-driven bullets. Separately, a "keep items separate" bullet
+// shows automatically whenever a return covers more than one item — that
+// one isn't item-specific, so it's not a tag (see multiItemNote below).
+// The closing line always shows regardless of any of the above.
+var CARE_GUIDELINES = [
+  { tag: 'pieces', text: 'Ensure you\'re returning with all puzzle/game/toy pieces — for anything under 100 pieces, a manual count is appreciated' },
+  { tag: 'parts',  text: 'Double-check for stray parts (clips, chargers, small accessories) so nothing gets left behind' },
+  { tag: 'spot-clean', text: 'Spot clean if it\'s dirty — if a wipe won\'t cut it, go ahead and give it a proper wash before returning' },
+  { tag: 'wash', text: 'Clean, as appropriate, before returning — either in the laundry or dishwasher, or disinfecting by hand' },
+  { tag: 'batteries', text: 'Check that the batteries still work — swap in fresh ones before returning if not' },
+  { tag: 'fold',   text: 'Pack it up neatly, especially if it comes in any sort of carrying case' }
+];
+
+// Resolves a set of collected tags (e.g. {launder: true, parts: true}) to the
+// matching guideline text, in CARE_GUIDELINES' fixed order, deduped.
+function careGuidelinesForTags(tagSet) {
+  return CARE_GUIDELINES.filter(function(g) { return tagSet[g.tag]; }).map(function(g) { return g.text; });
+}
+
+function buildReminderEmail(kind, firstName, lib, deco, dateFmt, time, items, careItems) {
+  var isPickup = kind === 'pickup';
+  careItems = careItems || [];
+  var verb = isPickup ? 'pickup' : 'return';
+  var stampText = isPickup ? 'Pickup Tomorrow' : 'Return Tomorrow';
+  var itemsLabel = isPickup ? 'Checked Out' : 'Returning';
+  var ctaVerb = isPickup ? 'pickup' : 'your return';
+  var waLink = reminderWhatsAppLink(lib.phone);
+  var whenText = time ? (dateFmt + ', ' + time) : dateFmt;
+  var timeNote = time ? '' : ' — time still to be confirmed';
+  var subject = 'Reminder: ' + lib.name + ' ' + verb + ' tomorrow';
+  var itemListHtml = items.map(function(i) { return '<div style="padding:3px 0;">• ' + i + '</div>'; }).join('');
+  // Not item-specific, so it lives outside CARE_GUIDELINES/tags — shows
+  // whenever a return covers more than one item, regardless of what's tagged.
+  var multiItemNote = (!isPickup && items.length > 1)
+    ? 'Returning more than one item? Keep them separate — nothing tucked inside something else (easy for me to miss when I\'m putting things away!)'
+    : '';
+  var careBulletItems = multiItemNote ? careItems.concat([multiItemNote]) : careItems;
+  var careBulletsHtml = careBulletItems.map(function(i) { return '<div style="padding:3px 0;">• ' + i + '</div>'; }).join('');
+  var careHtml = (isPickup || !careBulletsHtml) ? '' :
+    '<div style="margin-top:14px;">' +
+      '<div style="font-size: ' + REMINDER_FS_XS + '; text-transform:uppercase; letter-spacing:1px; color:' + REMINDER_STAMP_COLOR + '; margin-bottom:8px; font-weight:bold;">Before You Return</div>' +
+      '<div style="font-size: ' + REMINDER_FS_BASE + '; color:#1F2C3D;">' + careBulletsHtml + '</div>' +
+    '</div>';
+  var html =
+    '<div style="font-family: \'Courier New\', Courier, monospace; font-size: ' + REMINDER_FS_BASE + '; line-height: 1.6; max-width: 480px; margin: 0 auto; background:#F3ECDC; padding: 28px 16px;">' +
+      '<div style="text-align:center; margin-bottom: 20px;">' +
+        '<div style="font-size: ' + REMINDER_FS_XS + '; letter-spacing: 3px; text-transform: uppercase; color:#1F2C3D;">✦ SF Lending Library ✦</div>' +
+      '</div>' +
+      '<div style="background:#FFFDF7; border: 1px solid #E3D9BF; border-top: 4px solid ' + deco.color + '; border-radius: 4px; padding: 26px 22px;">' +
+        '<div style="text-align:center; margin-bottom: 20px;">' +
+          '<div style="display:inline-block; border: 3px double ' + REMINDER_STAMP_COLOR + '; border-radius: 6px; padding: 8px 22px 5px; transform: rotate(-4deg);">' +
+            '<div style="font-size: ' + REMINDER_FS_STAMP + '; letter-spacing: 2px; text-transform: uppercase; color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">' + stampText + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<p style="font-size: ' + REMINDER_FS_BASE + '; color:#1F2C3D; margin:0 0 12px;">Hi ' + firstName + ',</p>' +
+        '<p style="font-size: ' + REMINDER_FS_BASE + '; color:#1F2C3D; margin:0 0 16px;">Quick reminder — your ' + lib.shortName + ' ' + verb + ' is tomorrow, ' + whenText + timeNote + '.</p>' +
+        '<div style="border-top: 1px dashed #E3D9BF; border-bottom: 1px dashed #E3D9BF; padding: 14px 0; margin: 0 0 16px;">' +
+          '<div style="font-size: ' + REMINDER_FS_XS + '; text-transform:uppercase; letter-spacing:1px; color:' + REMINDER_STAMP_COLOR + '; margin-bottom:8px; font-weight:bold;">' + itemsLabel + '</div>' +
+          '<div style="font-size: ' + REMINDER_FS_BASE + '; color:#1F2C3D;">' + itemListHtml + '</div>' +
+          careHtml +
+        '</div>' +
+        '<div style="font-size: ' + REMINDER_FS_XS + '; text-transform:uppercase; letter-spacing:1px; color:' + REMINDER_STAMP_COLOR + '; margin-bottom:8px; font-weight:bold;">To Do</div>' +
+        '<div style="border-left: 3px solid ' + REMINDER_STAMP_COLOR + '; background:#F7E4E0; padding: 12px 16px; margin: 0 0 18px; border-radius: 2px; color:#1F2C3D; font-size: ' + REMINDER_FS_BASE + ';">' +
+          '<table role="presentation" cellpadding="0" cellspacing="0" style="display:inline-block; vertical-align:middle; margin-right:10px;"><tr><td style="width:24px; height:24px; border:2px solid ' + REMINDER_STAMP_COLOR + '; border-radius:4px; text-align:center; vertical-align:middle; font-size:17px; line-height:24px; font-weight:bold; color:' + REMINDER_STAMP_COLOR + ';">&#10003;</td></tr></table>' +
+          '<a href="' + waLink + '" style="color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">WhatsApp me</a> today to confirm and coordinate ' + ctaVerb + '.' +
+        '</div>' +
+        '<p style="font-size: ' + REMINDER_FS_BASE + '; color:#4E5A6B; margin:0 0 16px;">Address &amp; parking details are in your calendar invite. Questions? <a href="https://www.sflendinglibrary.org" style="color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">www.sflendinglibrary.org</a></p>' +
+        '<p style="font-size: ' + REMINDER_FS_BASE + '; color:#1F2C3D; margin:0;">See you soon!<br>Lauren</p>' +
+      '</div>' +
+      '<div style="text-align:center; margin-top: 18px;">' +
+        '<div style="font-size: ' + REMINDER_FS_XS + '; letter-spacing: 2px; text-transform: uppercase; color:#8A97A6;"><span style="text-decoration: line-through; opacity: 0.65;">Buy</span> &middot; Borrow &middot; Return &middot; Repeat</div>' +
+      '</div>' +
+    '</div>';
+  var careText = (isPickup || !careBulletItems.length) ? '' :
+    '\nBEFORE YOU RETURN\n' + careBulletItems.map(function(i) { return '- ' + i; }).join('\n') + '\n';
+  var text =
+    '✦ SF LENDING LIBRARY ✦\n\n' +
+    stampText.toUpperCase() + '\n\n' +
+    'Hi ' + firstName + ',\n\n' +
+    'Quick reminder — your ' + lib.shortName + ' ' + verb + ' is tomorrow, ' + whenText + timeNote + '.\n\n' +
+    itemsLabel.toUpperCase() + '\n' + items.map(function(i) { return '- ' + i; }).join('\n') + '\n' +
+    careText + '\n' +
+    'TO DO\n' +
+    '[ ] WhatsApp me at ' + lib.phone + ' today to confirm and coordinate ' + ctaVerb + ': ' + waLink + '\n\n' +
+    'Address & parking details are in your calendar invite. Questions? www.sflendinglibrary.org\n\n' +
+    'See you soon!\nLauren';
+  return { subject: subject, html: html, text: text };
+}
+
+function sendPickupReminders() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
+  var rows  = sheet.getDataRange().getValues().slice(1);
+  var tz    = Session.getScriptTimeZone();
+  var props = PropertiesService.getScriptProperties();
+  // The next calendar date, not "24 hours from now" — this is why the 8am
+  // and 4pm runs always agree on what "tomorrow" is and the copy stays
+  // accurate regardless of which run actually sends the email.
+  var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(0, 0, 0, 0);
+  function isTomorrow(d) {
+    var dt = d instanceof Date ? d : new Date(d); dt.setHours(0, 0, 0, 0);
+    return dt.getTime() === tomorrow.getTime();
+  }
+  function itemLabel(r) {
+    var qty = parseInt(r[8]); if (isNaN(qty) || qty < 1) qty = 1;
+    var label = String(r[7]).trim();
+    var details = [String(r[6] || '').trim(), String(r[9] || '').trim()].filter(Boolean).join(', ');
+    if (details) label += ' (' + details + ')';
+    if (qty > 1) label += ' x' + qty;
+    return label;
+  }
+  // Group by borrower + library + pickup time so one email covers all their items
+  var groups = {}, order = [];
+  rows.forEach(function(r) {
+    var status = String(r[15]).trim();
+    if (status !== 'Confirmed' && status !== 'Added to existing request') return;
+    if (!isTomorrow(r[10])) return;
+    var email = String(r[3]).trim();
+    var libraryKey = String(r[0]).trim();
+    if (!email || !libraryKey) return;
+    var key = libraryKey + '|' + email + '|' + String(r[11] || '').trim();
+    if (!groups[key]) {
+      order.push(key);
+      groups[key] = { library: libraryKey, name: String(r[2]).trim(), email: email, time: String(r[11] || '').trim(), items: [] };
+    }
+    groups[key].items.push(itemLabel(r));
+  });
+  var pickupFmt = Utilities.formatDate(tomorrow, tz, 'EEEE, MMMM d');
+  var todayFmt = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  order.forEach(function(key) {
+    var g = groups[key];
+    var sentKey = 'pickupReminder_' + key.replace(/[^a-z0-9]/gi, '_') + '_' + todayFmt;
+    if (props.getProperty(sentKey)) return;
+    var lib = getLibrary(g.library);
+    var deco = REMINDER_DECOR[g.library] || REMINDER_DECOR['kid-gear'];
+    var firstName = g.name.split(' ')[0];
+    var email = buildReminderEmail('pickup', firstName, lib, deco, pickupFmt, g.time, g.items);
+    GmailApp.sendEmail(g.email, email.subject, email.text, { htmlBody: email.html, bcc: Session.getEffectiveUser().getEmail() });
+    props.setProperty(sentKey, 'sent');
+  });
+}
+
+function sendReturnReminders() {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(RSVP_TAB);
+  var rows  = sheet.getDataRange().getValues().slice(1);
+  var invRows = ss.getSheetByName(INV_TAB).getDataRange().getValues();
+  var tz    = Session.getScriptTimeZone();
+  var props = PropertiesService.getScriptProperties();
+  var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(0, 0, 0, 0);
+  function isTomorrow(d) {
+    var dt = d instanceof Date ? d : new Date(d); dt.setHours(0, 0, 0, 0);
+    return dt.getTime() === tomorrow.getTime();
+  }
+  function itemLabel(r) {
+    var qty = parseInt(r[8]); if (isNaN(qty) || qty < 1) qty = 1;
+    var label = String(r[7]).trim();
+    var details = [String(r[6] || '').trim(), String(r[9] || '').trim()].filter(Boolean).join(', ');
+    if (details) label += ' (' + details + ')';
+    if (qty > 1) label += ' x' + qty;
+    return label;
+  }
+  // Group by borrower + library + return time so one email covers all their
+  // items, collecting the union of care tags across every item in the group
+  // so the "Before You Return" section only shows what's actually relevant.
+  var groups = {}, order = [];
+  rows.forEach(function(r) {
+    var status = String(r[15]).trim();
+    if (status !== 'Lent Out' && status !== 'Added to existing request') return;
+    if (!isTomorrow(r[12])) return;
+    var email = String(r[3]).trim();
+    var libraryKey = String(r[0]).trim();
+    if (!email || !libraryKey) return;
+    var key = libraryKey + '|' + email + '|' + String(r[13] || '').trim();
+    if (!groups[key]) {
+      order.push(key);
+      groups[key] = { library: libraryKey, name: String(r[2]).trim(), email: email, time: String(r[13] || '').trim(), items: [], careTags: {} };
+    }
+    groups[key].items.push(itemLabel(r));
+    var itemName = String(r[7]).trim();
+    getItemCareTags(itemName, libraryKey, invRows).forEach(function(tag) { groups[key].careTags[tag] = true; });
+  });
+  var returnFmt = Utilities.formatDate(tomorrow, tz, 'EEEE, MMMM d');
+  var todayFmt = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  order.forEach(function(key) {
+    var g = groups[key];
+    var sentKey = 'returnReminder_' + key.replace(/[^a-z0-9]/gi, '_') + '_' + todayFmt;
+    if (props.getProperty(sentKey)) return;
+    var lib = getLibrary(g.library);
+    var deco = REMINDER_DECOR[g.library] || REMINDER_DECOR['kid-gear'];
+    var firstName = g.name.split(' ')[0];
+    var careItems = careGuidelinesForTags(g.careTags);
+    var email = buildReminderEmail('return', firstName, lib, deco, returnFmt, g.time, g.items, careItems);
+    GmailApp.sendEmail(g.email, email.subject, email.text, { htmlBody: email.html, bcc: Session.getEffectiveUser().getEmail() });
+    props.setProperty(sentKey, 'sent');
+  });
+}
+
+// Sends real (non-draft) sample reminders to yourself, so you can check
+// rendering in an actual received email rather than Gmail's compose editor
+// (which strips a lot of the CSS this template uses). Run these directly
+// from the Apps Script editor's function dropdown. Change libraryKey below
+// to preview a different library's shelf color.
+function testPickupReminderEmail() {
+  var libraryKey = 'party';
+  var lib = getLibrary(libraryKey);
+  var deco = REMINDER_DECOR[libraryKey] || REMINDER_DECOR['kid-gear'];
+  var tz = Session.getScriptTimeZone();
+  var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+  var pickupFmt = Utilities.formatDate(tomorrow, tz, 'EEEE, MMMM d');
+  var email = buildReminderEmail('pickup', 'Maria', lib, deco, pickupFmt, '4pm - 6pm', ['Bubble Machine (Little Tikes)', 'Balloon Arch Kit']);
+  GmailApp.sendEmail(Session.getEffectiveUser().getEmail(), '[TEST] ' + email.subject, email.text, { htmlBody: email.html });
+  Logger.log('Test pickup reminder sent to ' + Session.getEffectiveUser().getEmail());
+}
+
+// Uses real inventory Care Tags for the sample items below — a quick way to
+// confirm your tagging is actually producing the guidelines you expect.
+// Change itemNames/libraryKey to preview a different item's real tags.
+function testReturnReminderEmail() {
+  var libraryKey = 'party';
+  var lib = getLibrary(libraryKey);
+  var deco = REMINDER_DECOR[libraryKey] || REMINDER_DECOR['kid-gear'];
+  var tz = Session.getScriptTimeZone();
+  var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+  var returnFmt = Utilities.formatDate(tomorrow, tz, 'EEEE, MMMM d');
+  var itemNames = ['Bubble Machine', 'Balloon Arch Kit'];
+  var invRows = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(INV_TAB).getDataRange().getValues();
+  var careTags = {};
+  itemNames.forEach(function(name) { getItemCareTags(name, libraryKey, invRows).forEach(function(tag) { careTags[tag] = true; }); });
+  var email = buildReminderEmail('return', 'Maria', lib, deco, returnFmt, '4pm - 6pm', ['Bubble Machine (Little Tikes)', 'Balloon Arch Kit'], careGuidelinesForTags(careTags));
+  GmailApp.sendEmail(Session.getEffectiveUser().getEmail(), '[TEST] ' + email.subject, email.text, { htmlBody: email.html });
+  Logger.log('Test return reminder sent to ' + Session.getEffectiveUser().getEmail() + ' — care tags found: ' + JSON.stringify(careTags));
 }
 
 function sendPendingReceipts() {
@@ -960,6 +1238,10 @@ function setupTriggers() {
   ScriptApp.newTrigger('sendPendingInvites').timeBased().everyMinutes(5).create();
   ScriptApp.newTrigger('nightlyAudit').timeBased().everyDays(1).atHour(8).create();
   ScriptApp.newTrigger('dailyScheduleEmail').timeBased().everyDays(1).atHour(19).create();
+  ScriptApp.newTrigger('sendPickupReminders').timeBased().everyDays(1).atHour(8).create();
+  ScriptApp.newTrigger('sendPickupReminders').timeBased().everyDays(1).atHour(16).create(); // catch-all for reservations confirmed after the 8am run
+  ScriptApp.newTrigger('sendReturnReminders').timeBased().everyDays(1).atHour(8).create();
+  ScriptApp.newTrigger('sendReturnReminders').timeBased().everyDays(1).atHour(16).create(); // catch-all for items marked Lent Out after the 8am run
   ScriptApp.newTrigger('setupTriggers').timeBased().everyDays(1).atHour(3).create();
   Logger.log('Triggers installed.');
 }

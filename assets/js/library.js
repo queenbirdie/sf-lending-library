@@ -2,6 +2,7 @@
 // comes from fetch() against the Apps Script JSON API instead of google.script.run.
 var libraryKey = document.body.getAttribute('data-lib-key');
 var cart = {}, allItems = [], allReservations = [], blackoutRanges = [], DAY = 86400000, bookingWindowDays = 90;
+var BOOKING_LEAD_DAYS = 2; // earliest a pickup can be booked, in calendar days from today
 var isSubmitting = false;
 var activeCategory = null, currentItems = [], currentDatesKnown = false;
 var CAT_ORDER = [
@@ -39,8 +40,8 @@ function init(data) {
     document.getElementById('libraryName').textContent = 'The SF Lending Library: ' + data.library.shortName;
     document.title = data.library.name;
   }
-  var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
-  var minDate = tomorrow.getFullYear() + '-' + String(tomorrow.getMonth()+1).padStart(2,'0') + '-' + String(tomorrow.getDate()).padStart(2,'0');
+  var earliestPickup = new Date(); earliestPickup.setDate(earliestPickup.getDate() + BOOKING_LEAD_DAYS);
+  var minDate = earliestPickup.getFullYear() + '-' + String(earliestPickup.getMonth()+1).padStart(2,'0') + '-' + String(earliestPickup.getDate()).padStart(2,'0');
   var maxPickup = new Date(); maxPickup.setDate(maxPickup.getDate() + bookingWindowDays);
   var maxDate = maxPickup.getFullYear() + '-' + String(maxPickup.getMonth()+1).padStart(2,'0') + '-' + String(maxPickup.getDate()).padStart(2,'0');
   ['pickupDate','returnDate'].forEach(function(id) {
@@ -403,7 +404,7 @@ function submitForm() {
   var pickupMs = new Date(pickupDate + 'T00:00:00').getTime();
   var returnMs = new Date(returnDate + 'T00:00:00').getTime();
   var todayMs  = new Date(new Date().toDateString()).getTime();
-  if (pickupMs <= todayMs) { showModalError('Pickup date must be tomorrow or later.'); return; }
+  if (pickupMs < todayMs + BOOKING_LEAD_DAYS * DAY) { showModalError('Pickup date must be at least ' + BOOKING_LEAD_DAYS + ' days from today.'); return; }
   if (pickupMs > todayMs + bookingWindowDays * DAY) { showModalError('Pickup date must be within ' + bookingWindowDays + ' days from today.'); return; }
   if (returnMs <= pickupMs) { showModalError('Return date must be after pickup date.'); return; }
   if (isBlackout(pickupMs)) { showModalError('Pickup date falls on a blackout date — please choose a different date.'); return; }

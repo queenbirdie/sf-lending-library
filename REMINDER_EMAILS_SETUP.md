@@ -146,7 +146,7 @@ optional **Care Tags** column on the `inventory` sheet.
 
    | Tag | Guideline shown |
    |---|---|
-   | `pieces` | Ensure you're returning with all puzzle/game pieces — for anything under 100 pieces, a manual count is appreciated |
+   | `pieces` | Ensure you're returning with all puzzle/game/toy pieces — for anything under 100 pieces, a manual count is appreciated |
    | `parts` | Double-check for stray parts (clips, chargers, small accessories) so nothing gets left behind |
    | `spot-clean` | Spot clean if it's dirty — if a wipe won't cut it, go ahead and give it a proper wash before returning |
    | `wash` | Clean, as appropriate, before returning — either in the laundry or dishwasher, or disinfecting by hand |

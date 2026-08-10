@@ -23,6 +23,7 @@ const RSVP_TAB            = 'reservations';
 const FAQ_TAB              = 'faq';
 const BLACKOUT_TAB        = 'Blackout Dates';
 const BOOKING_WINDOW_DAYS = 90;
+const BOOKING_LEAD_DAYS   = 2; // earliest a pickup can be booked, in calendar days from today
 const CALENDAR_DAYS       = 60;
 const IMAGES_FOLDER_ID    = '1Zxh_fjMqklzbudaovuHsgPxZx5TK7sCE'; // root (fallback)
 
@@ -201,7 +202,8 @@ function submitReservation(formData) {
     var returnDate = parseDateString(returnDateStr);
     if (returnDate <= pickupDate) return { success: false, message: 'Return date must be after pickup date.' };
     var today = new Date(); today.setHours(0,0,0,0);
-    if (pickupDate < today) return { success: false, message: 'Pickup date cannot be in the past.' };
+    var minPickup = new Date(today); minPickup.setDate(minPickup.getDate() + BOOKING_LEAD_DAYS);
+    if (pickupDate < minPickup) return { success: false, message: 'Pickup date must be at least ' + BOOKING_LEAD_DAYS + ' days from today.' };
     var maxPickup = new Date(today); maxPickup.setDate(maxPickup.getDate() + BOOKING_WINDOW_DAYS);
     if (pickupDate > maxPickup) return { success: false, message: 'Pickup date must be within ' + BOOKING_WINDOW_DAYS + ' days from today.' };
     var blackoutDates = getBlackoutDates();

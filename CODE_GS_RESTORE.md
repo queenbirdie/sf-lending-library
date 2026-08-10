@@ -530,7 +530,7 @@ var CARE_GUIDELINES = [
   { tag: 'pieces', text: 'Ensure you\'re returning with all puzzle/game pieces — for anything under 100 pieces, a manual count is appreciated' },
   { tag: 'parts',  text: 'Double-check for stray parts (clips, chargers, small accessories) so nothing gets left behind' },
   { tag: 'spot-clean', text: 'Spot clean if it\'s dirty — if a wipe won\'t cut it, go ahead and give it a proper wash before returning' },
-  { tag: 'wash', text: 'Clean, as appropriate, before returning — either in the laundry or dishwasher, or by disinfecting by hand' },
+  { tag: 'wash', text: 'Clean, as appropriate, before returning — either in the laundry or dishwasher, or disinfecting by hand' },
   { tag: 'batteries', text: 'Check that the batteries still work — swap in fresh ones before returning if not' },
   { tag: 'fold',   text: 'Pack it up neatly, especially if it comes in any sort of carrying case' }
 ];

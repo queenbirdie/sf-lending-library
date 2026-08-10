@@ -527,7 +527,7 @@ function reminderWhatsAppLink(phone) {
 // one isn't item-specific, so it's not a tag (see multiItemNote below).
 // The closing line always shows regardless of any of the above.
 var CARE_GUIDELINES = [
-  { tag: 'pieces', text: 'Ensure you\'re returning with all puzzle/game pieces — for anything under 100 pieces, a manual count is appreciated' },
+  { tag: 'pieces', text: 'Ensure you\'re returning with all puzzle/game/toy pieces — for anything under 100 pieces, a manual count is appreciated' },
   { tag: 'parts',  text: 'Double-check for stray parts (clips, chargers, small accessories) so nothing gets left behind' },
   { tag: 'spot-clean', text: 'Spot clean if it\'s dirty — if a wipe won\'t cut it, go ahead and give it a proper wash before returning' },
   { tag: 'wash', text: 'Clean, as appropriate, before returning — either in the laundry or dishwasher, or disinfecting by hand' },

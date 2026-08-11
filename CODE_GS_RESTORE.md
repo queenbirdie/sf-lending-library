@@ -537,10 +537,17 @@ var CARE_GUIDELINES = [
   { tag: 'fold',   text: 'Pack it up neatly, especially if it comes in any sort of carrying case' }
 ];
 
-// Resolves a set of collected tags (e.g. {launder: true, parts: true}) to the
-// matching guideline text, in CARE_GUIDELINES' fixed order, deduped.
-function careGuidelinesForTags(tagSet) {
-  return CARE_GUIDELINES.filter(function(g) { return tagSet[g.tag]; }).map(function(g) { return g.text; });
+// Resolves collected tags to guideline text, in CARE_GUIDELINES' fixed
+// order. tagItems maps each tag to the item name(s) that carried it, e.g.
+// { 'spot-clean': ['SlumberPod'], 'wash': ['Fast Table Chair'] }. When a
+// return covers more than one item, each guideline gets "(Item Name)"
+// appended so it's clear which item it's about — without that, two
+// different items' guidelines read as a confusing, seemingly redundant
+// list with no indication of which applies to what.
+function careGuidelinesForTags(tagItems, showAttribution) {
+  return CARE_GUIDELINES.filter(function(g) { return tagItems[g.tag] && tagItems[g.tag].length; }).map(function(g) {
+    return showAttribution ? g.text + ' (' + tagItems[g.tag].join(', ') + ')' : g.text;
+  });
 }
 
 function buildReminderEmail(kind, firstName, lib, deco, dateFmt, time, items, careItems) {
@@ -686,8 +693,10 @@ function sendReturnReminders() {
     return label;
   }
   // Group by borrower + library + return time so one email covers all their
-  // items, collecting the union of care tags across every item in the group
-  // so the "Before You Return" section only shows what's actually relevant.
+  // items, collecting which item(s) carried each care tag (not just
+  // whether the tag showed up at all) so the "Before You Return" section
+  // can say which item a guideline is about when a return mixes items
+  // with different tags.
   var groups = {}, order = [];
   rows.forEach(function(r) {
     var status = String(r[15]).trim();
@@ -699,11 +708,14 @@ function sendReturnReminders() {
     var key = libraryKey + '|' + email + '|' + String(r[13] || '').trim();
     if (!groups[key]) {
       order.push(key);
-      groups[key] = { library: libraryKey, name: String(r[2]).trim(), email: email, time: String(r[13] || '').trim(), items: [], careTags: {} };
+      groups[key] = { library: libraryKey, name: String(r[2]).trim(), email: email, time: String(r[13] || '').trim(), items: [], careItemsByTag: {} };
     }
     groups[key].items.push(itemLabel(r));
     var itemName = String(r[7]).trim();
-    getItemCareTags(itemName, libraryKey, invRows).forEach(function(tag) { groups[key].careTags[tag] = true; });
+    getItemCareTags(itemName, libraryKey, invRows).forEach(function(tag) {
+      if (!groups[key].careItemsByTag[tag]) groups[key].careItemsByTag[tag] = [];
+      if (groups[key].careItemsByTag[tag].indexOf(itemName) === -1) groups[key].careItemsByTag[tag].push(itemName);
+    });
   });
   var returnFmt = Utilities.formatDate(tomorrow, tz, 'EEEE, MMMM d');
   var todayFmt = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
@@ -714,7 +726,7 @@ function sendReturnReminders() {
     var lib = getLibrary(g.library);
     var deco = REMINDER_DECOR[g.library] || REMINDER_DECOR['kid-gear'];
     var firstName = g.name.split(' ')[0];
-    var careItems = careGuidelinesForTags(g.careTags);
+    var careItems = careGuidelinesForTags(g.careItemsByTag, g.items.length > 1);
     var email = buildReminderEmail('return', firstName, lib, deco, returnFmt, g.time, g.items, careItems);
     GmailApp.sendEmail(g.email, email.subject, email.text, { htmlBody: email.html, bcc: Session.getEffectiveUser().getEmail() });
     props.setProperty(sentKey, 'sent');
@@ -750,11 +762,16 @@ function testReturnReminderEmail() {
   var returnFmt = Utilities.formatDate(tomorrow, tz, 'EEEE, MMMM d');
   var itemNames = ['Bubble Machine', 'Balloon Arch Kit'];
   var invRows = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(INV_TAB).getDataRange().getValues();
-  var careTags = {};
-  itemNames.forEach(function(name) { getItemCareTags(name, libraryKey, invRows).forEach(function(tag) { careTags[tag] = true; }); });
-  var email = buildReminderEmail('return', 'Maria', lib, deco, returnFmt, '4pm - 6pm', ['Bubble Machine (Little Tikes)', 'Balloon Arch Kit'], careGuidelinesForTags(careTags));
+  var careItemsByTag = {};
+  itemNames.forEach(function(name) {
+    getItemCareTags(name, libraryKey, invRows).forEach(function(tag) {
+      if (!careItemsByTag[tag]) careItemsByTag[tag] = [];
+      if (careItemsByTag[tag].indexOf(name) === -1) careItemsByTag[tag].push(name);
+    });
+  });
+  var email = buildReminderEmail('return', 'Maria', lib, deco, returnFmt, '4pm - 6pm', ['Bubble Machine (Little Tikes)', 'Balloon Arch Kit'], careGuidelinesForTags(careItemsByTag, itemNames.length > 1));
   GmailApp.sendEmail(Session.getEffectiveUser().getEmail(), '[TEST] ' + email.subject, email.text, { htmlBody: email.html });
-  Logger.log('Test return reminder sent to ' + Session.getEffectiveUser().getEmail() + ' — care tags found: ' + JSON.stringify(careTags));
+  Logger.log('Test return reminder sent to ' + Session.getEffectiveUser().getEmail() + ' — care tags found: ' + JSON.stringify(careItemsByTag));
 }
 
 function sendPendingReceipts() {

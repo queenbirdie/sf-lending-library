@@ -158,6 +158,14 @@ optional **Care Tags** column on the `inventory` sheet.
    else" bullet, regardless of what's tagged. See `multiItemNote` inside
    `buildReminderEmail()` if you want to change that wording.
 
+   **When a return has more than one item, each guideline gets "(Item
+   Name)" appended** so it's clear which item it's about — e.g. a
+   SlumberPod (`spot-clean`) returned alongside a high chair (`wash,
+   parts`) shows three distinct, attributed bullets instead of a flat list
+   that reads like contradictory instructions for the same thing.
+   Single-item returns skip the attribution since there's nothing to
+   disambiguate.
+
    `spot-clean` is for occasional-wipe items (bath tubs, bottle bags);
    `wash` is for anything that needs an actual clean rather than a wipe —
    fabric in regular food/mouth contact (clip-on high chair straps,

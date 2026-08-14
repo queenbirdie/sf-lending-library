@@ -80,6 +80,25 @@ Admin's revise-reservation date fields (`assets/js/admin.js`) are
 deliberately **not** bound by this — that's an authenticated override
 path for Lauren, not public self-service booking.
 
+## Borrow window limits (per library)
+
+Each library in `LIBRARIES` (`Code.js`) has a `maxLoanDays` capping how
+long an item may be checked out (`returnDate - pickupDate`). Current
+values: Kid & Travel Gear 21, Party Supplies 7, Kids' Costumes 7, Puzzles
+& Games 60, Yoto 21. Enforced in the same three-places pattern as booking
+lead time:
+- `Code.js` `getAvailabilityData()` includes `maxLoanDays` in the
+  `availability` API response so the frontend knows the current library's
+  cap.
+- `assets/js/library.js`: `onDatesChange()` sets the return-date picker's
+  `max` from `pickupDate + maxLoanDays`, and `submitForm()` re-validates
+  before submit.
+- `Code.js` `submitReservation()` is the real gate — rejects any
+  reservation whose loan length exceeds `lib.maxLoanDays`.
+
+Same caveat as booking lead time: Admin's revise-reservation flow is not
+bound by this.
+
 ## Deployment
 
 - `assets/`, `layouts/`, `content/`, `data/`, `hugo.toml` → live site,

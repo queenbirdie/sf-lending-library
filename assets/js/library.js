@@ -1,7 +1,7 @@
 // Library browse page. Ported from the Apps Script SPA — same logic, but data
 // comes from fetch() against the Apps Script JSON API instead of google.script.run.
 var libraryKey = document.body.getAttribute('data-lib-key');
-var cart = {}, allItems = [], allReservations = [], blackoutRanges = [], DAY = 86400000, bookingWindowDays = 90;
+var cart = {}, allItems = [], allReservations = [], blackoutRanges = [], DAY = 86400000, bookingWindowDays = 90, maxLoanDays = null;
 var BOOKING_LEAD_DAYS = 2; // earliest a pickup can be booked, in calendar days from today
 var isSubmitting = false;
 var activeCategory = null, currentItems = [], currentDatesKnown = false;
@@ -36,6 +36,7 @@ function init(data) {
   }
   allItems = data.items; allReservations = data.reservations; blackoutRanges = data.blackouts || [];
   bookingWindowDays = data.bookingWindowDays || 90;
+  maxLoanDays = data.maxLoanDays || null;
   if (data.library && data.library.name) {
     document.getElementById('libraryName').textContent = 'The SF Lending Library: ' + data.library.shortName;
     document.title = data.library.name;
@@ -94,6 +95,12 @@ function onDatesChange() {
     var minRetStr = minReturn.getFullYear() + '-' + String(minReturn.getMonth()+1).padStart(2,'0') + '-' + String(minReturn.getDate()).padStart(2,'0');
     document.getElementById('returnDate').min = minRetStr;
     if (ret && ret <= pickup) { document.getElementById('returnDate').value = ''; ret = ''; }
+    if (maxLoanDays) {
+      var maxReturn = new Date(pickup + 'T00:00:00'); maxReturn.setDate(maxReturn.getDate() + maxLoanDays);
+      var maxRetStr = maxReturn.getFullYear() + '-' + String(maxReturn.getMonth()+1).padStart(2,'0') + '-' + String(maxReturn.getDate()).padStart(2,'0');
+      document.getElementById('returnDate').max = maxRetStr;
+      if (ret && ret > maxRetStr) { document.getElementById('returnDate').value = ''; ret = ''; }
+    }
   }
   if (pickup && isBlackout(new Date(pickup + 'T00:00:00').getTime())) {
     errEl.textContent = 'That pickup date is unavailable — please choose a different date.';
@@ -111,6 +118,7 @@ function onDatesChange() {
   var pickupMs = new Date(pickup + 'T00:00:00').getTime();
   var retMs    = new Date(ret    + 'T00:00:00').getTime();
   if (retMs <= pickupMs) { errEl.textContent = 'Return date must be after pickup date.'; errEl.style.display = 'block'; return; }
+  if (maxLoanDays && (retMs - pickupMs) > maxLoanDays * DAY) { errEl.textContent = 'Borrow window for this library is limited to ' + maxLoanDays + ' days.'; errEl.style.display = 'block'; return; }
   var filtered = allItems.map(function(item) {
     var avail = checkDateAvailability(item.name, pickupMs, retMs, item.qty || 1);
     return Object.assign({}, item, { available: avail.available, tight: avail.tight, nextAvailable: avail.nextAvailable, availableQty: avail.availableQty, totalQty: avail.totalQty });
@@ -407,6 +415,7 @@ function submitForm() {
   if (pickupMs < todayMs + BOOKING_LEAD_DAYS * DAY) { showModalError('Pickup date must be at least ' + BOOKING_LEAD_DAYS + ' days from today.'); return; }
   if (pickupMs > todayMs + bookingWindowDays * DAY) { showModalError('Pickup date must be within ' + bookingWindowDays + ' days from today.'); return; }
   if (returnMs <= pickupMs) { showModalError('Return date must be after pickup date.'); return; }
+  if (maxLoanDays && (returnMs - pickupMs) > maxLoanDays * DAY) { showModalError('Borrow window for this library is limited to ' + maxLoanDays + ' days — please choose a shorter return date.'); return; }
   if (isBlackout(pickupMs)) { showModalError('Pickup date falls on a blackout date — please choose a different date.'); return; }
   if (isBlackout(returnMs)) { showModalError('Return date falls on a blackout date — please choose a different date.'); return; }
   var itemsPayload = Object.keys(cart).map(function(n) { return { name: n, qty: cart[n] }; });

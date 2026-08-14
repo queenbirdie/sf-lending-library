@@ -28,12 +28,14 @@ const CALENDAR_DAYS       = 60;
 const IMAGES_FOLDER_ID    = '1Zxh_fjMqklzbudaovuHsgPxZx5TK7sCE'; // root (fallback)
 
 // ── Libraries ────────────────────────────
+// maxLoanDays caps how long an item may be checked out (returnDate - pickupDate),
+// enforced server-side in submitReservation() and mirrored client-side in library.js.
 const LIBRARIES = [
-  { key: 'kid-gear',  tabAbbr: 'KG', shortName: 'Kid & Travel Gear', name: 'Kid & Travel Gear Lending Library',    address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1ayKDRAZMJdD2cOJDnXVjZa9DGwz0GvOb' },
-  { key: 'party',     tabAbbr: 'PS', shortName: 'Party Supplies',    name: 'Party Supplies Lending Library',       address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1E8NsGt5WkPcdO1uIovOVZI0LkB06im_4' },
-  { key: 'costumes',  tabAbbr: 'KC', shortName: 'Kids\' Costumes',   name: 'Kids\' Costumes Lending Library',      address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1UyprtKkcowekEbnRUvVrGH9oYaMKjuOc' },
-  { key: 'puzzles',   tabAbbr: 'PG', shortName: 'Puzzles & Games',   name: 'Puzzles & Games Lending Library',      address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1--vhQGQEc9WnuKNkPM9YSdrsgd0Pundy' },
-  { key: 'yoto',      tabAbbr: 'YT', shortName: 'Yoto',              name: 'Yoto Lending Library',                 address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1YquLATJiVLGYCQtDWjpOylH79mC8nBnH' },
+  { key: 'kid-gear',  tabAbbr: 'KG', shortName: 'Kid & Travel Gear', name: 'Kid & Travel Gear Lending Library',    address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1ayKDRAZMJdD2cOJDnXVjZa9DGwz0GvOb', maxLoanDays: 21 },
+  { key: 'party',     tabAbbr: 'PS', shortName: 'Party Supplies',    name: 'Party Supplies Lending Library',       address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1E8NsGt5WkPcdO1uIovOVZI0LkB06im_4', maxLoanDays: 7 },
+  { key: 'costumes',  tabAbbr: 'KC', shortName: 'Kids\' Costumes',   name: 'Kids\' Costumes Lending Library',      address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1UyprtKkcowekEbnRUvVrGH9oYaMKjuOc', maxLoanDays: 7 },
+  { key: 'puzzles',   tabAbbr: 'PG', shortName: 'Puzzles & Games',   name: 'Puzzles & Games Lending Library',      address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1--vhQGQEc9WnuKNkPM9YSdrsgd0Pundy', maxLoanDays: 60 },
+  { key: 'yoto',      tabAbbr: 'YT', shortName: 'Yoto',              name: 'Yoto Lending Library',                 address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1YquLATJiVLGYCQtDWjpOylH79mC8nBnH', maxLoanDays: 21 },
 ];
 
 // ── Pickup reminder look & feel ──────────
@@ -198,9 +200,12 @@ function submitReservation(formData) {
     if (!pickupDateStr || !returnDateStr) return { success: false, message: 'Pickup and return dates are required.' };
     if (!items.length) return { success: false, message: 'No items selected.' };
     if (!libraryKey || !isKnownLibrary(libraryKey)) return { success: false, message: 'Invalid library.' };
+    var lib = getLibrary(libraryKey);
     var pickupDate = parseDateString(pickupDateStr);
     var returnDate = parseDateString(returnDateStr);
     if (returnDate <= pickupDate) return { success: false, message: 'Return date must be after pickup date.' };
+    var loanDays = Math.round((returnDate - pickupDate) / (24 * 60 * 60 * 1000));
+    if (lib.maxLoanDays && loanDays > lib.maxLoanDays) return { success: false, message: 'Borrow window for ' + lib.shortName + ' is limited to ' + lib.maxLoanDays + ' days — please choose a shorter return date.' };
     var today = new Date(); today.setHours(0,0,0,0);
     var minPickup = new Date(today); minPickup.setDate(minPickup.getDate() + BOOKING_LEAD_DAYS);
     if (pickupDate < minPickup) return { success: false, message: 'Pickup date must be at least ' + BOOKING_LEAD_DAYS + ' days from today.' };
@@ -1457,7 +1462,7 @@ function getAvailabilityData(libraryKey) {
   try {
     blackouts = getBlackoutDates().map(function(b) { return { start: b.start.getTime(), end: b.end.getTime() }; });
   } catch(e) { Logger.log('getBlackoutDates failed: ' + e); }
-  var result = { items: items, reservations: reservations, blackouts: blackouts, bookingWindowDays: BOOKING_WINDOW_DAYS, library: { key: lib.key, name: lib.name, shortName: lib.shortName } };
+  var result = { items: items, reservations: reservations, blackouts: blackouts, bookingWindowDays: BOOKING_WINDOW_DAYS, maxLoanDays: lib.maxLoanDays, library: { key: lib.key, name: lib.name, shortName: lib.shortName } };
   try { cache.put(cacheKey, JSON.stringify(result), 900); } catch(e) {}
   return result;
 }

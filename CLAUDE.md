@@ -67,6 +67,13 @@ tucked inside something else"). No "leave it as good as you found it"
 closing line anymore — removed per Lauren's request. Full tag table and
 tagging conventions: `REMINDER_EMAILS_SETUP.md`.
 
+`careGuidelinesByItem()` normally attributes each guideline to the item
+it came from ("(Item Name)") on multi-item returns. Yoto (`libraryKey ===
+'yoto'`) is the one exception: attribution is always off and repeated
+guideline text is deduped to one bullet, so borrowing several cards with
+the same `spot-clean` tag produces a single generic bullet instead of one
+per card.
+
 ## Booking lead time
 
 `BOOKING_LEAD_DAYS = 2` — the earliest a pickup can be booked is 2

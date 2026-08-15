@@ -182,6 +182,13 @@ optional **Care Tags** column on the `inventory` sheet.
    guidelines show for that item, and if a return is a single untagged
    item, the whole "Before You Return" section is skipped entirely rather
    than showing an empty label.
+
+   **Yoto is the one exception to attribution and repetition:** borrowing
+   several cards tagged `spot-clean` would otherwise repeat the identical
+   bullet once per card. For the Yoto library, item attribution is always
+   off and repeated guideline text collapses to a single bullet — so
+   returning a player plus three cards, all tagged `spot-clean`, shows
+   that guideline just once, with no card names attached.
 3. Nothing else needs to change — `sendReturnReminders()` already reads
    this column, unions the tags across everything in a return, and shows
    only the matching guidelines.

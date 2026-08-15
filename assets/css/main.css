@@ -44,6 +44,7 @@ header p { font-size: 0.95rem; opacity: 0.88; }
 .filter-summary { width: 100%; font-size: 0.85rem; color: var(--text-tertiary); margin-top: 0.25rem; }
 .filter-summary strong { color: var(--accent); }
 .blackout-note { width: 100%; font-size: 0.82rem; color: var(--text-tertiary); margin-top: 0.4rem; }
+.loan-window-note { width: 100%; font-size: 0.82rem; color: var(--text-tertiary); margin-top: 0.4rem; }
 .container { max-width: 820px; margin: 0 auto; padding: 2rem 1rem; }
 .loading { text-align: center; padding: 3rem; color: var(--text-tertiary); font-size: 1.05rem; }
 .category-group { margin-bottom: 2.5rem; }

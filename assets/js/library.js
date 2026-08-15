@@ -49,6 +49,13 @@ function init(data) {
     document.getElementById(id).min = minDate;
   });
   document.getElementById('pickupDate').max = maxDate;
+  var loanNoteEl = document.getElementById('loanWindowNote');
+  if (maxLoanDays) {
+    loanNoteEl.textContent = 'Borrows for this library can be up to ' + maxLoanDays + ' days.';
+    loanNoteEl.style.display = 'block';
+  } else {
+    loanNoteEl.style.display = 'none';
+  }
   document.getElementById('loading').style.display = 'none';
   document.getElementById('content').style.display = 'block';
   currentItems = allItems; currentDatesKnown = false;
@@ -100,7 +107,10 @@ function onDatesChange() {
       var maxRetStr = maxReturn.getFullYear() + '-' + String(maxReturn.getMonth()+1).padStart(2,'0') + '-' + String(maxReturn.getDate()).padStart(2,'0');
       document.getElementById('returnDate').max = maxRetStr;
       if (ret && ret > maxRetStr) { document.getElementById('returnDate').value = ''; ret = ''; }
+      document.getElementById('loanWindowNote').textContent = 'Return by ' + fmtDate(maxRetStr) + ' at the latest (' + maxLoanDays + '-day max for this library).';
     }
+  } else if (maxLoanDays) {
+    document.getElementById('loanWindowNote').textContent = 'Borrows for this library can be up to ' + maxLoanDays + ' days.';
   }
   if (pickup && isBlackout(new Date(pickup + 'T00:00:00').getTime())) {
     errEl.textContent = 'That pickup date is unavailable — please choose a different date.';

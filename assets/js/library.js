@@ -29,6 +29,16 @@ function fmtDate(s) {
   return new Date(s + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+// maxRetStr, if given, is the actual return-date cutoff for the currently
+// selected pickup date (yyyy-mm-dd); omitted before a pickup date is chosen.
+function loanWindowNoteHtml(maxRetStr) {
+  var lead = maxRetStr
+    ? 'Return by ' + fmtDate(maxRetStr) + ' at the latest (' + maxLoanDays + '-day max for this library).'
+    : 'Borrows for this library can be up to ' + maxLoanDays + ' days.';
+  return lead + ' Need it longer? Submit your reservation for the max window, then ' +
+    '<button class="change-dates-btn" onclick="openContactModal()">send us a message</button> about the extra time you need.';
+}
+
 function init(data) {
   if (data.error) {
     document.getElementById('loading').textContent = "Couldn't load availability — please try again shortly.";
@@ -51,7 +61,7 @@ function init(data) {
   document.getElementById('pickupDate').max = maxDate;
   var loanNoteEl = document.getElementById('loanWindowNote');
   if (maxLoanDays) {
-    loanNoteEl.textContent = 'Borrows for this library can be up to ' + maxLoanDays + ' days.';
+    loanNoteEl.innerHTML = loanWindowNoteHtml();
     loanNoteEl.style.display = 'block';
   } else {
     loanNoteEl.style.display = 'none';
@@ -107,10 +117,10 @@ function onDatesChange() {
       var maxRetStr = maxReturn.getFullYear() + '-' + String(maxReturn.getMonth()+1).padStart(2,'0') + '-' + String(maxReturn.getDate()).padStart(2,'0');
       document.getElementById('returnDate').max = maxRetStr;
       if (ret && ret > maxRetStr) { document.getElementById('returnDate').value = ''; ret = ''; }
-      document.getElementById('loanWindowNote').textContent = 'Return by ' + fmtDate(maxRetStr) + ' at the latest (' + maxLoanDays + '-day max for this library).';
+      document.getElementById('loanWindowNote').innerHTML = loanWindowNoteHtml(maxRetStr);
     }
   } else if (maxLoanDays) {
-    document.getElementById('loanWindowNote').textContent = 'Borrows for this library can be up to ' + maxLoanDays + ' days.';
+    document.getElementById('loanWindowNote').innerHTML = loanWindowNoteHtml();
   }
   if (pickup && isBlackout(new Date(pickup + 'T00:00:00').getTime())) {
     errEl.textContent = 'That pickup date is unavailable — please choose a different date.';

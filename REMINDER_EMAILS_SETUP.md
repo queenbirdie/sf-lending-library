@@ -160,13 +160,23 @@ optional **Care Tags** column on the `inventory` sheet.
 
    **Guidelines are grouped by item, in the same order as the "Returning"
    list, not by tag priority** — all of the first item's guidelines, then
-   the second's, and so on. When a return has more than one item, each
-   guideline also gets "(Item Name)" appended so it's clear which item
-   it's about — e.g. a SlumberPod (`spot-clean`) returned alongside a
-   high chair (`wash, parts`) shows the SlumberPod's bullet first, then
-   both of the high chair's, each attributed, instead of interleaving by
-   which tag happens to sort earlier. Single-item returns skip the
-   attribution since there's nothing to disambiguate.
+   the second's, and so on. When a return has more than one item, a
+   guideline that's unique to a single item gets "(Item Name)" appended so
+   it's clear which item it's about — e.g. a SlumberPod (`spot-clean`)
+   returned alongside a high chair (`wash, parts`) shows the SlumberPod's
+   bullet first, then both of the high chair's, each attributed, instead
+   of interleaving by which tag happens to sort earlier. Single-item
+   returns skip attribution entirely since there's nothing to disambiguate.
+
+   **A guideline shared by more than one item collapses to a single
+   bullet, with no attribution** — e.g. two puzzles both tagged `pieces`
+   produce one "returning with all puzzle/game pieces" bullet, not one per
+   puzzle with each puzzle's name tacked on, since attribution wouldn't
+   disambiguate anything once the same guideline applies to more than one
+   thing. This is what makes multi-card Yoto returns tagged `spot-clean`
+   show that guideline just once too — it's a general rule based on
+   whether a guideline is actually unique to one item, not a Yoto-specific
+   case.
 
    `spot-clean` is for occasional-wipe items (bath tubs, bottle bags);
    `wash` is for anything that needs an actual clean rather than a wipe —
@@ -182,13 +192,6 @@ optional **Care Tags** column on the `inventory` sheet.
    guidelines show for that item, and if a return is a single untagged
    item, the whole "Before You Return" section is skipped entirely rather
    than showing an empty label.
-
-   **Yoto is the one exception to attribution and repetition:** borrowing
-   several cards tagged `spot-clean` would otherwise repeat the identical
-   bullet once per card. For the Yoto library, item attribution is always
-   off and repeated guideline text collapses to a single bullet — so
-   returning a player plus three cards, all tagged `spot-clean`, shows
-   that guideline just once, with no card names attached.
 3. Nothing else needs to change — `sendReturnReminders()` already reads
    this column, unions the tags across everything in a return, and shows
    only the matching guidelines.

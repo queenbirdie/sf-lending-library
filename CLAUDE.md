@@ -67,12 +67,14 @@ tucked inside something else"). No "leave it as good as you found it"
 closing line anymore — removed per Lauren's request. Full tag table and
 tagging conventions: `REMINDER_EMAILS_SETUP.md`.
 
-`careGuidelinesByItem()` normally attributes each guideline to the item
-it came from ("(Item Name)") on multi-item returns. Yoto (`libraryKey ===
-'yoto'`) is the one exception: attribution is always off and repeated
-guideline text is deduped to one bullet, so borrowing several cards with
-the same `spot-clean` tag produces a single generic bullet instead of one
-per card.
+`careGuidelinesByItem()` attributes each guideline to the item it came
+from ("(Item Name)") on multi-item returns — but only when that guideline
+is unique to one item. A guideline shared by more than one item (two
+puzzles both tagged `pieces`, several Yoto cards all tagged `spot-clean`)
+collapses to a single unattributed bullet instead of repeating the
+identical line once per item, since attribution wouldn't disambiguate
+anything once it applies to more than one thing. This is a general rule,
+not a per-library special case.
 
 ## Booking lead time
 

@@ -551,27 +551,28 @@ var CARE_GUIDELINES = [
 // is the item names in the order they should appear (matching the
 // "Returning" list); itemTags maps each item name to its tags, e.g.
 // { 'SlumberPod': ['spot-clean'], 'Fast Table Chair': ['wash', 'parts'] }.
-// When a return covers more than one item, each guideline gets "(Item
-// Name)" appended so it's clear which item it's about; single-item
-// returns skip that since there's nothing to disambiguate.
-// Yoto is the one exception: borrowing several cards at once would
-// otherwise repeat the identical spot-clean bullet once per card, so for
-// libraryKey 'yoto' attribution is always off and repeated guideline text
-// is deduped down to a single generic bullet.
-function careGuidelinesByItem(itemOrder, itemTags, showAttribution, libraryKey) {
-  var lines = [];
-  var dedupe = libraryKey === 'yoto';
-  var attribute = showAttribution && !dedupe;
+// When a return covers more than one item, a guideline unique to a single
+// item gets "(Item Name)" appended so it's clear which item it's about.
+// A guideline shared by more than one item — e.g. two puzzles both tagged
+// "pieces", or several Yoto cards all tagged "spot-clean" — collapses to
+// one unattributed bullet instead of repeating the identical line once
+// per item, since attribution wouldn't disambiguate anything once it
+// applies to more than one thing. Single-item returns skip attribution
+// entirely since there's nothing to disambiguate.
+function careGuidelinesByItem(itemOrder, itemTags, showAttribution) {
+  var order = [], byText = {};
   itemOrder.forEach(function(itemName) {
     var tags = itemTags[itemName] || [];
     CARE_GUIDELINES.forEach(function(g) {
       if (tags.indexOf(g.tag) === -1) return;
-      var line = attribute ? g.text + ' (' + itemName + ')' : g.text;
-      if (dedupe && lines.indexOf(line) !== -1) return;
-      lines.push(line);
+      if (!byText[g.text]) { byText[g.text] = []; order.push(g.text); }
+      if (byText[g.text].indexOf(itemName) === -1) byText[g.text].push(itemName);
     });
   });
-  return lines;
+  return order.map(function(text) {
+    var items = byText[text];
+    return (showAttribution && items.length === 1) ? text + ' (' + items[0] + ')' : text;
+  });
 }
 
 function buildReminderEmail(kind, firstName, lib, deco, dateFmt, time, items, careItems) {
@@ -754,7 +755,7 @@ function sendReturnReminders() {
     var lib = getLibrary(g.library);
     var deco = REMINDER_DECOR[g.library] || REMINDER_DECOR['kid-gear'];
     var firstName = g.name.split(' ')[0];
-    var careItems = careGuidelinesByItem(g.careItemOrder, g.careTagsByItem, g.items.length > 1, g.library);
+    var careItems = careGuidelinesByItem(g.careItemOrder, g.careTagsByItem, g.items.length > 1);
     var email = buildReminderEmail('return', firstName, lib, deco, returnFmt, g.time, g.items, careItems);
     GmailApp.sendEmail(g.email, email.subject, email.text, { htmlBody: email.html, bcc: Session.getEffectiveUser().getEmail() });
     props.setProperty(sentKey, 'sent');
@@ -797,7 +798,7 @@ function testReturnReminderEmail() {
     if (careItemOrder.indexOf(name) === -1) careItemOrder.push(name);
     careTagsByItem[name] = tags;
   });
-  var email = buildReminderEmail('return', 'Maria', lib, deco, returnFmt, '4pm - 6pm', ['Bubble Machine (Little Tikes)', 'Balloon Arch Kit'], careGuidelinesByItem(careItemOrder, careTagsByItem, itemNames.length > 1, libraryKey));
+  var email = buildReminderEmail('return', 'Maria', lib, deco, returnFmt, '4pm - 6pm', ['Bubble Machine (Little Tikes)', 'Balloon Arch Kit'], careGuidelinesByItem(careItemOrder, careTagsByItem, itemNames.length > 1));
   GmailApp.sendEmail(Session.getEffectiveUser().getEmail(), '[TEST] ' + email.subject, email.text, { htmlBody: email.html });
   Logger.log('Test return reminder sent to ' + Session.getEffectiveUser().getEmail() + ' — care tags found: ' + JSON.stringify(careTagsByItem));
 }

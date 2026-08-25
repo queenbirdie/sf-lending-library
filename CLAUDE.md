@@ -105,6 +105,13 @@ lead time:
 - `Code.js` `submitReservation()` is the real gate — rejects any
   reservation whose loan length exceeds `lib.maxLoanDays`.
 
+If the natural cutoff (`pickupDate + maxLoanDays`) lands on a blackout
+date, it rolls forward to the next open day instead of just shrinking the
+borrower's window — `maxLoanCutoff()` in `Code.js`, mirrored by
+`loanCutoffMs()` in `library.js`. A blackout date elsewhere in the middle
+of the loan period doesn't affect the cap; only one sitting right at the
+boundary does.
+
 Same caveat as booking lead time: Admin's revise-reservation flow is not
 bound by this.
 

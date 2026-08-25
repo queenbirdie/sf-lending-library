@@ -113,7 +113,7 @@ function onDatesChange() {
     document.getElementById('returnDate').min = minRetStr;
     if (ret && ret <= pickup) { document.getElementById('returnDate').value = ''; ret = ''; }
     if (maxLoanDays) {
-      var maxReturn = new Date(pickup + 'T00:00:00'); maxReturn.setDate(maxReturn.getDate() + maxLoanDays);
+      var maxReturn = new Date(loanCutoffMs(new Date(pickup + 'T00:00:00').getTime(), maxLoanDays));
       var maxRetStr = maxReturn.getFullYear() + '-' + String(maxReturn.getMonth()+1).padStart(2,'0') + '-' + String(maxReturn.getDate()).padStart(2,'0');
       document.getElementById('returnDate').max = maxRetStr;
       if (ret && ret > maxRetStr) { document.getElementById('returnDate').value = ''; ret = ''; }
@@ -138,7 +138,7 @@ function onDatesChange() {
   var pickupMs = new Date(pickup + 'T00:00:00').getTime();
   var retMs    = new Date(ret    + 'T00:00:00').getTime();
   if (retMs <= pickupMs) { errEl.textContent = 'Return date must be after pickup date.'; errEl.style.display = 'block'; return; }
-  if (maxLoanDays && (retMs - pickupMs) > maxLoanDays * DAY) { errEl.textContent = 'Borrow window for this library is limited to ' + maxLoanDays + ' days.'; errEl.style.display = 'block'; return; }
+  if (maxLoanDays && retMs > loanCutoffMs(pickupMs, maxLoanDays)) { errEl.textContent = 'Borrow window for this library is limited to ' + maxLoanDays + ' days.'; errEl.style.display = 'block'; return; }
   var filtered = allItems.map(function(item) {
     var avail = checkDateAvailability(item.name, pickupMs, retMs, item.qty || 1);
     return Object.assign({}, item, { available: avail.available, tight: avail.tight, nextAvailable: avail.nextAvailable, availableQty: avail.availableQty, totalQty: avail.totalQty });
@@ -204,6 +204,15 @@ function isBlackout(ms) {
     if (ms >= blackoutRanges[i].start && ms <= blackoutRanges[i].end) return true;
   }
   return false;
+}
+
+// pickupMs + days, rolled forward past any blackout date(s) sitting right
+// at that boundary, so a blackout landing on the natural cutoff doesn't
+// shrink the real window below `days`. Mirrors maxLoanCutoff() in Code.js.
+function loanCutoffMs(pickupMs, days) {
+  var d = new Date(pickupMs); d.setDate(d.getDate() + days);
+  while (isBlackout(d.getTime())) d.setDate(d.getDate() + 1);
+  return d.getTime();
 }
 
 function clearDates() {
@@ -435,7 +444,7 @@ function submitForm() {
   if (pickupMs < todayMs + BOOKING_LEAD_DAYS * DAY) { showModalError('Pickup date must be at least ' + BOOKING_LEAD_DAYS + ' days from today.'); return; }
   if (pickupMs > todayMs + bookingWindowDays * DAY) { showModalError('Pickup date must be within ' + bookingWindowDays + ' days from today.'); return; }
   if (returnMs <= pickupMs) { showModalError('Return date must be after pickup date.'); return; }
-  if (maxLoanDays && (returnMs - pickupMs) > maxLoanDays * DAY) { showModalError('Borrow window for this library is limited to ' + maxLoanDays + ' days — please choose a shorter return date.'); return; }
+  if (maxLoanDays && returnMs > loanCutoffMs(pickupMs, maxLoanDays)) { showModalError('Borrow window for this library is limited to ' + maxLoanDays + ' days — please choose a shorter return date.'); return; }
   if (isBlackout(pickupMs)) { showModalError('Pickup date falls on a blackout date — please choose a different date.'); return; }
   if (isBlackout(returnMs)) { showModalError('Return date falls on a blackout date — please choose a different date.'); return; }
   var itemsPayload = Object.keys(cart).map(function(n) { return { name: n, qty: cart[n] }; });

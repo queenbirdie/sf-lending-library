@@ -128,3 +128,14 @@ bound by this.
   certainly an accidental wrong-repo upload. They were reverted
   (`5e6cbd4`). If root-level files ever look unrelated to this project
   again, check `git log` before assuming they're intentional.
+- Session hygiene: on 2026-08-25, two Claude Code sessions were pushing
+  to this repo around the same time — one adding borrow-window limits,
+  another independently generalizing `careGuidelinesByItem()`'s Yoto
+  dedupe. Both landed fine (different functions, no line conflicts), but
+  `main` had moved between fetch and merge, turning an expected
+  fast-forward into a real merge. `CODE_GS_RESTORE.md` is one large file
+  most backend changes touch, so a same-region collision is easy to
+  imagine next time. Prefer one active session on this repo at a time;
+  if you can't be sure of that, `git fetch origin main` immediately
+  before merging rather than assuming `main` hasn't moved since you last
+  checked.

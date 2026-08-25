@@ -204,14 +204,13 @@ function submitReservation(formData) {
     var pickupDate = parseDateString(pickupDateStr);
     var returnDate = parseDateString(returnDateStr);
     if (returnDate <= pickupDate) return { success: false, message: 'Return date must be after pickup date.' };
-    var loanDays = Math.round((returnDate - pickupDate) / (24 * 60 * 60 * 1000));
-    if (lib.maxLoanDays && loanDays > lib.maxLoanDays) return { success: false, message: 'Borrow window for ' + lib.shortName + ' is limited to ' + lib.maxLoanDays + ' days — please choose a shorter return date.' };
+    var blackoutDates = getBlackoutDates();
+    if (lib.maxLoanDays && returnDate > maxLoanCutoff(pickupDate, lib.maxLoanDays, blackoutDates)) return { success: false, message: 'Borrow window for ' + lib.shortName + ' is limited to ' + lib.maxLoanDays + ' days — please choose a shorter return date.' };
     var today = new Date(); today.setHours(0,0,0,0);
     var minPickup = new Date(today); minPickup.setDate(minPickup.getDate() + BOOKING_LEAD_DAYS);
     if (pickupDate < minPickup) return { success: false, message: 'Pickup date must be at least ' + BOOKING_LEAD_DAYS + ' days from today.' };
     var maxPickup = new Date(today); maxPickup.setDate(maxPickup.getDate() + BOOKING_WINDOW_DAYS);
     if (pickupDate > maxPickup) return { success: false, message: 'Pickup date must be within ' + BOOKING_WINDOW_DAYS + ' days from today.' };
-    var blackoutDates = getBlackoutDates();
     if (isBlackoutDate(pickupDate, blackoutDates)) return { success: false, message: 'Pickup date falls on a blackout date — please choose a different date.' };
     if (isBlackoutDate(returnDate, blackoutDates)) return { success: false, message: 'Return date falls on a blackout date — please choose a different date.' };
     var sheet = getOrCreateReservationsSheet();
@@ -337,6 +336,17 @@ function getBlackoutDates() {
 function isBlackoutDate(date, blackoutDates) {
   var d = new Date(date); d.setHours(0,0,0,0);
   return blackoutDates.some(function(b) { return d >= b.start && d <= b.end; });
+}
+
+// Rolls pickupDate + maxLoanDays forward past any blackout date(s) sitting
+// right at that boundary, so a blackout landing on the natural cutoff
+// doesn't shrink a borrower's real window below maxLoanDays. Blackout
+// dates elsewhere in the loan period don't affect this — only a blackout
+// at (or immediately after) the cutoff itself pushes it out.
+function maxLoanCutoff(pickupDate, maxLoanDays, blackoutDates) {
+  var cutoff = new Date(pickupDate); cutoff.setDate(cutoff.getDate() + maxLoanDays);
+  while (isBlackoutDate(cutoff, blackoutDates)) cutoff.setDate(cutoff.getDate() + 1);
+  return cutoff;
 }
 
 function checkAvailability(item, newPickup, newReturn, requestedQty, libraryKey, invRows, rsvpRows) {

@@ -1,0 +1,1780 @@
+// ==========================================
+// SF LENDING LIBRARY — Google Apps Script
+// v2.0 Unified — April 2026
+// ==========================================
+
+// ── Tabs ─────────────────────────────────
+const INV_TAB             = 'inventory';
+const RSVP_TAB            = 'reservations';
+const FAQ_TAB              = 'faq';
+const BLACKOUT_TAB        = 'Blackout Dates';
+const BOOKING_WINDOW_DAYS = 90;
+const BOOKING_LEAD_DAYS   = 2; // earliest a pickup can be booked, in calendar days from today
+const CALENDAR_DAYS       = 60;
+const IMAGES_FOLDER_ID    = '1Zxh_fjMqklzbudaovuHsgPxZx5TK7sCE'; // root (fallback)
+
+// ── Libraries ────────────────────────────
+// maxLoanDays caps how long an item may be checked out (returnDate - pickupDate),
+// enforced server-side in submitReservation() and mirrored client-side in library.js.
+const LIBRARIES = [
+  { key: 'kid-gear',  tabAbbr: 'KG', shortName: 'Kid & Travel Gear', name: 'Kid & Travel Gear Lending Library',    address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1ayKDRAZMJdD2cOJDnXVjZa9DGwz0GvOb', maxLoanDays: 21 },
+  { key: 'party',     tabAbbr: 'PS', shortName: 'Party Supplies',    name: 'Party Supplies Lending Library',       address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1E8NsGt5WkPcdO1uIovOVZI0LkB06im_4', maxLoanDays: 7 },
+  { key: 'costumes',  tabAbbr: 'KC', shortName: 'Kids\' Costumes',   name: 'Kids\' Costumes Lending Library',      address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1UyprtKkcowekEbnRUvVrGH9oYaMKjuOc', maxLoanDays: 7 },
+  { key: 'puzzles',   tabAbbr: 'PG', shortName: 'Puzzles & Games',   name: 'Puzzles & Games Lending Library',      address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1--vhQGQEc9WnuKNkPM9YSdrsgd0Pundy', maxLoanDays: 60 },
+  { key: 'yoto',      tabAbbr: 'YT', shortName: 'Yoto',              name: 'Yoto Lending Library',                 address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1YquLATJiVLGYCQtDWjpOylH79mC8nBnH', maxLoanDays: 21 },
+];
+
+// ── Pickup reminder look & feel ──────────
+// Matches the site's card-catalog branding (assets/css/main.css): cream
+// background, navy ink, red rubber-stamp accent, per-library shelf color.
+const REMINDER_STAMP_COLOR = '#C0392B'; // --accent
+// Consistent type scale used throughout the reminder email — xs for
+// labels/fine print, base for all body copy, one larger size for the stamp.
+const REMINDER_FS_XS = '11px', REMINDER_FS_BASE = '14px', REMINDER_FS_STAMP = '13px';
+const REMINDER_DECOR = {
+  'kid-gear': { color: '#2E5FA3' },
+  'party':    { color: '#D9622B' },
+  'costumes': { color: '#6B4A8C' },
+  'puzzles':  { color: '#2F7A4F' },
+  'yoto':     { color: '#C77D18' }
+};
+
+function getLibrary(key) {
+  return LIBRARIES.find(function(l) { return l.key === key; }) || LIBRARIES[0];
+}
+
+// getLibrary() intentionally falls back to LIBRARIES[0] for render-time
+// convenience, which means "!getLibrary(key)" can never actually catch an
+// unrecognized key — it always finds *something*. Use this instead at
+// intake points that must reject an invalid/unknown library key.
+function isKnownLibrary(key) {
+  return LIBRARIES.some(function(l) { return l.key === key; });
+}
+
+// ── Inventory columns (0-based) ──────────
+const COL_ITEM_ID        = 0;  // A
+const COL_LIBRARY        = 1;  // B
+const COL_CATEGORY       = 2;  // C
+const COL_BRAND          = 3;  // D
+const COL_ITEM           = 4;  // E
+const COL_SIZE           = 5;  // F
+// G = Product Image (formula column, not read by code)
+const COL_IMAGE_URL      = 7;  // H
+const COL_LINK           = 8;  // I
+const COL_CURRENTLY_HAVE = 9;  // J (ACTIVE)
+const COL_QTY            = 10; // K
+const COL_CARE_TAGS      = 11; // L — optional, comma-separated (see CARE_GUIDELINES)
+
+// ── Reservations columns (1-based) ───────
+// A=Library, B=Timestamp, C=Name, D=Email, E=Phone, F=Item ID, G=Brand, H=Item Name,
+// I=Qty Requested, J=Size, K=Pickup Date, L=Pickup Time, M=Return Date, N=Return Time,
+// O=Availability Status, P=Status, Q=Notes,
+// R=Actual Return Date, S=# Days Returned Late
+const RSVP_ITEM_ID_COL = 6;  // F
+const RSVP_BRAND_COL   = 7;  // G
+const RSVP_QTY_COL     = 9;  // I (right after Item Name)
+const RSVP_SIZE_COL    = 10; // J
+const RSVP_STATUS_COL  = 16; // P
+const RSVP_LIBRARY_COL = 1;  // A
+
+// ─────────────────────────────────────────
+
+function parseDateString(str) {
+  var parts = str.split('-');
+  var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+// Cross-listing: an inventory row's Library cell can hold more than one
+// library key, comma-separated (e.g. "kid-gear, puzzles"), for a single
+// physical item that should show up — and share one availability pool —
+// in more than one catalog.
+function itemLibraries(rawLibraryField) {
+  return String(rawLibraryField || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+}
+
+function libraryMatches(rawLibraryField, libraryKey) {
+  return itemLibraries(rawLibraryField).indexOf(libraryKey) !== -1;
+}
+
+// Resolves one inventory row for an item. Prefers an exact Item ID match
+// (stable — untouched by later renames) when itemId is given; falls back
+// to matching by name when there's no ID to go on. The one place that
+// fallback is actually needed: translating a fresh submission from the
+// frontend, which only ever knows an item by its current name. Everywhere
+// else works from a reservation's already-stored Item ID, so a later
+// rename of the inventory row can't silently break the join.
+function findInventoryRow(itemId, itemName, libraryKey, invRows) {
+  if (itemId) {
+    for (var i = 1; i < invRows.length; i++) {
+      if (String(invRows[i][COL_ITEM_ID]).trim() === itemId) return invRows[i];
+    }
+  }
+  if (itemName) {
+    for (var j = 1; j < invRows.length; j++) {
+      if (String(invRows[j][COL_ITEM]).trim() === itemName && libraryMatches(invRows[j][COL_LIBRARY], libraryKey)) return invRows[j];
+    }
+  }
+  return null;
+}
+
+// Full set of library keys a given item is listed under (its cross-listing
+// group). Falls back to just the key passed in if the item isn't found.
+function getItemLibraries(itemId, itemName, libraryKey, invRows) {
+  var row = findInventoryRow(itemId, itemName, libraryKey, invRows);
+  return row ? itemLibraries(row[COL_LIBRARY]) : [libraryKey];
+}
+
+function getItemQty(itemId, itemName, libraryKey, invRows) {
+  var row = findInventoryRow(itemId, itemName, libraryKey, invRows);
+  if (!row) return 1;
+  var q = parseInt(row[COL_QTY]);
+  return isNaN(q) || q < 1 ? 1 : q;
+}
+
+// The one lookup that's inherently name-based: resolving a fresh
+// submission's item name to its current inventory row so we have
+// something stable (the ID) to store on the new reservation going forward.
+function getItemId(itemName, libraryKey, invRows) {
+  var row = findInventoryRow(null, itemName, libraryKey, invRows);
+  return row ? String(row[COL_ITEM_ID]).trim() : '';
+}
+
+function getItemBrand(itemId, itemName, libraryKey, invRows) {
+  var row = findInventoryRow(itemId, itemName, libraryKey, invRows);
+  return row ? String(row[COL_BRAND] || '').trim() : '';
+}
+
+function getItemSize(itemId, itemName, libraryKey, invRows) {
+  var row = findInventoryRow(itemId, itemName, libraryKey, invRows);
+  return row ? String(row[COL_SIZE] || '').trim() : '';
+}
+
+// Comma-separated tags from the inventory sheet's Care Tags column (e.g.
+// "food, parts"), split into a clean array. See CARE_GUIDELINES for the
+// recognized tags and what each renders as on the return reminder.
+function getItemCareTags(itemId, itemName, libraryKey, invRows) {
+  var row = findInventoryRow(itemId, itemName, libraryKey, invRows);
+  return row ? String(row[COL_CARE_TAGS] || '').split(',').map(function(t) { return t.trim(); }).filter(Boolean) : [];
+}
+
+function getItemImageUrl(itemId, itemName, libraryKey, invRows) {
+  var row = findInventoryRow(itemId, itemName, libraryKey, invRows);
+  return row ? normalizeDriveUrl(String(row[COL_IMAGE_URL] || '').trim()) : '';
+}
+
+function submitReservation(formData) {
+  try {
+    var libraryKey    = String(formData.libraryKey || '').trim();
+    var name          = String(formData.name        || '').trim();
+    var email         = String(formData.email       || '').trim();
+    var phone         = String(formData.phone       || '').trim();
+    var pickupDateStr = String(formData.pickupDate  || '').trim();
+    var pickupTime    = String(formData.pickupTime  || '').trim();
+    var returnDateStr = String(formData.returnDate  || '').trim();
+    var returnTime    = String(formData.returnTime  || '').trim();
+    var items         = formData.items || [];
+    if (!name)   return { success: false, message: 'Name is required.' };
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { success: false, message: 'A valid email address is required.' };
+    if (!phone)  return { success: false, message: 'Phone number is required.' };
+    if (!pickupDateStr || !returnDateStr) return { success: false, message: 'Pickup and return dates are required.' };
+    if (!items.length) return { success: false, message: 'No items selected.' };
+    if (!libraryKey || !isKnownLibrary(libraryKey)) return { success: false, message: 'Invalid library.' };
+    var lib = getLibrary(libraryKey);
+    var pickupDate = parseDateString(pickupDateStr);
+    var returnDate = parseDateString(returnDateStr);
+    if (returnDate <= pickupDate) return { success: false, message: 'Return date must be after pickup date.' };
+    var blackoutDates = getBlackoutDates();
+    if (lib.maxLoanDays && returnDate > maxLoanCutoff(pickupDate, lib.maxLoanDays, blackoutDates)) return { success: false, message: 'Borrow window for ' + lib.shortName + ' is limited to ' + lib.maxLoanDays + ' days — please choose a shorter return date.' };
+    var today = new Date(); today.setHours(0,0,0,0);
+    var minPickup = new Date(today); minPickup.setDate(minPickup.getDate() + BOOKING_LEAD_DAYS);
+    if (pickupDate < minPickup) return { success: false, message: 'Pickup date must be at least ' + BOOKING_LEAD_DAYS + ' days from today.' };
+    var maxPickup = new Date(today); maxPickup.setDate(maxPickup.getDate() + BOOKING_WINDOW_DAYS);
+    if (pickupDate > maxPickup) return { success: false, message: 'Pickup date must be within ' + BOOKING_WINDOW_DAYS + ' days from today.' };
+    if (isBlackoutDate(pickupDate, blackoutDates)) return { success: false, message: 'Pickup date falls on a blackout date — please choose a different date.' };
+    if (isBlackoutDate(returnDate, blackoutDates)) return { success: false, message: 'Return date falls on a blackout date — please choose a different date.' };
+    var sheet = getOrCreateReservationsSheet();
+    var timestamp = new Date();
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var invRows  = ss.getSheetByName(INV_TAB).getDataRange().getValues();
+    var rsvpRows = ss.getSheetByName(RSVP_TAB).getDataRange().getValues().slice(1);
+    var newRows = [];
+    var unavailable = [];
+    items.forEach(function(item) {
+      var itemName     = typeof item === 'object' ? String(item.name) : String(item);
+      var requestedQty = (typeof item === 'object' && item.qty) ? parseInt(item.qty) : 1;
+      if (isNaN(requestedQty) || requestedQty < 1) requestedQty = 1;
+      // Resolve the item's stable ID once, by name — the only point in the
+      // whole flow where that's necessary — then use the ID for everything
+      // else, including matching this request against existing reservations.
+      var itemId       = getItemId(itemName, libraryKey, invRows);
+      var availStatus  = checkAvailability(itemId, itemName, pickupDate, returnDate, requestedQty, libraryKey, invRows, rsvpRows);
+      if (availStatus === '✗ Unavailable') { unavailable.push(itemName); return; }
+      var brand        = getItemBrand(itemId, itemName, libraryKey, invRows);
+      var size         = getItemSize(itemId, itemName, libraryKey, invRows);
+      newRows.push([libraryKey, timestamp, name, email, phone, itemId, brand, itemName, requestedQty, size, pickupDate, pickupTime, returnDate, returnTime, availStatus, 'Pending', '']);
+    });
+    if (unavailable.length) return { success: false, message: 'The following item(s) are not available for your selected dates: ' + unavailable.join(', ') + '. Please choose different dates or remove these items from your cart.' };
+    var lastRow = sheet.getLastRow();
+    sheet.getRange(lastRow + 1, 1, newRows.length, newRows[0].length).setValues(newRows);
+    clearAvailabilityCache(libraryKey);
+    return { success: true };
+  } catch (err) {
+    return { success: false, message: 'Something went wrong: ' + err.message };
+  }
+}
+
+function colorizeReservations(sheet) {
+  var s = sheet || SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
+  if (!s) return;
+  var lastRow = s.getLastRow();
+  if (lastRow < 2) return;
+  var numCols  = 19;
+  var colorA   = '#ffffff';
+  var colorB   = '#f0ebe7';
+  var SKIP_STATUSES = ['Returned', 'Cancelled', 'Lost or Damaged'];
+  // Read cols B–Q (16 cols): timestamp at [0], status at [14] (col P), qty at [7] (col I)
+  var data = s.getRange(2, 2, lastRow - 1, 16).getValues();
+  var groupColors = [], groupIdx = 0, prevTs = null;
+  for (var i = 0; i < data.length; i++) {
+    var ts     = String(data[i][0]);  // col B (timestamp)
+    var status = String(data[i][14]).trim(); // col P (status)
+    if (SKIP_STATUSES.indexOf(status) !== -1) { groupColors.push(null); continue; }
+    if (ts !== prevTs) { groupIdx++; prevTs = ts; }
+    groupColors.push(groupIdx % 2 === 1 ? colorA : colorB);
+  }
+  // Apply row background colors
+  for (var i = 0; i < groupColors.length; i++) {
+    if (groupColors[i] === null) continue;
+    var start = i, color = groupColors[i];
+    while (i + 1 < groupColors.length && groupColors[i + 1] === color) i++;
+    s.getRange(start + 2, 1, i - start + 1, numCols).setBackground(color);
+  }
+  // Highlight Qty > 1: orange background + bold on the Qty Requested column (I)
+  s.getRange(2, RSVP_QTY_COL, lastRow - 1, 1).setFontWeight('normal');
+  for (var i = 0; i < data.length; i++) {
+    var qty = parseInt(data[i][7]); // col I (Qty Requested)
+    if (!isNaN(qty) && qty > 1 && groupColors[i] !== null) {
+      s.getRange(i + 2, RSVP_QTY_COL).setBackground('#F4A98A').setFontWeight('bold');
+    }
+  }
+}
+
+function getOrCreateReservationsSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(RSVP_TAB);
+  if (!sheet) {
+    sheet = ss.insertSheet(RSVP_TAB);
+    var headers = ['Library','Timestamp','Name','Email','Phone','Item ID','Brand','Item Name','Qty Requested','Size','Pickup Date','Pickup Time','Return Date','Return Time','Availability Status','Status','Notes','Actual Return Date','# of Days Returned Late'];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold').setBackground('#f3f3f3');
+    sheet.setFrozenRows(1);
+    fixReservationDropdown(sheet);
+  }
+  return sheet;
+}
+
+function fixReservationDropdown(sheet) {
+  var s = sheet || SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
+  if (!s) return;
+  var maxRows = s.getMaxRows() - 1;
+  // Clear validation from any previously used status columns (N=14 and O=15)
+  s.getRange(2, 14, maxRows, 2).clearDataValidations();
+  // Apply dropdown only to the correct column (O = RSVP_STATUS_COL = 15)
+  var rule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['Pending','Confirmed','Lent Out','Returned','Cancelled','Lost or Damaged','Added to existing request'], true)
+    .setAllowInvalid(false).build();
+  s.getRange(2, RSVP_STATUS_COL, maxRows, 1).setDataValidation(rule);
+  s.getBandings().forEach(function(b) { b.remove(); });
+  colorizeReservations(s);
+  Logger.log('Dropdown fixed on col O and coloring applied.');
+}
+
+function combineDateAndTime(date, timeStr) {
+  var d = new Date(date);
+  if (!timeStr) return d;
+  if (timeStr instanceof Date) { d.setHours(timeStr.getHours(), timeStr.getMinutes(), 0, 0); return d; }
+  var s = String(timeStr).trim();
+  var match = s.match(/^(\d+)\s*(am|pm)?\s*-\s*\d+\s*(am|pm)/i);
+  if (match) {
+    var hours = parseInt(match[1]);
+    var period = (match[2] || match[3]).toUpperCase();
+    if (period === 'PM' && hours !== 12) hours += 12;
+    if (period === 'AM' && hours === 12) hours = 0;
+    d.setHours(hours, 0, 0, 0); return d;
+  }
+  return d;
+}
+
+function getBlackoutDates() {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(BLACKOUT_TAB);
+  if (!sheet) return [];
+  var today = new Date(); today.setHours(0,0,0,0);
+  return sheet.getDataRange().getValues().slice(1)
+    .filter(function(r) { return r[0] && r[1]; })
+    .map(function(r) { var start = new Date(r[0]); start.setHours(0,0,0,0); var end = new Date(r[1]); end.setHours(0,0,0,0); return { start: start, end: end }; })
+    .filter(function(b) { return b.end >= today; });
+}
+
+function isBlackoutDate(date, blackoutDates) {
+  var d = new Date(date); d.setHours(0,0,0,0);
+  return blackoutDates.some(function(b) { return d >= b.start && d <= b.end; });
+}
+
+// Rolls pickupDate + maxLoanDays forward past any blackout date(s) sitting
+// right at that boundary, so a blackout landing on the natural cutoff
+// doesn't shrink a borrower's real window below maxLoanDays. Blackout
+// dates elsewhere in the loan period don't affect this — only a blackout
+// at (or immediately after) the cutoff itself pushes it out.
+function maxLoanCutoff(pickupDate, maxLoanDays, blackoutDates) {
+  var cutoff = new Date(pickupDate); cutoff.setDate(cutoff.getDate() + maxLoanDays);
+  while (isBlackoutDate(cutoff, blackoutDates)) cutoff.setDate(cutoff.getDate() + 1);
+  return cutoff;
+}
+
+function checkAvailability(itemId, itemName, newPickup, newReturn, requestedQty, libraryKey, invRows, rsvpRows) {
+  requestedQty = parseInt(requestedQty) || 1;
+  var totalQty = getItemQty(itemId, itemName, libraryKey, invRows);
+  var itemLibs = getItemLibraries(itemId, itemName, libraryKey, invRows);
+  var rows = rsvpRows || SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB).getDataRange().getValues().slice(1);
+  var np  = new Date(newPickup); np.setHours(0, 0, 0, 0);
+  var nr  = new Date(newReturn); nr.setHours(0, 0, 0, 0);
+  var DAY = 86400000;
+  var overlapping = [];
+  var hasTight = false;
+  rows.forEach(function(r) {
+    var rowItemId   = String(r[5] || '').trim();
+    var rowItemName = String(r[7]).trim();
+    var rowLibrary  = String(r[0]).trim();
+    var status      = String(r[15]).trim();
+    // Prefer matching by Item ID (stable across a rename); only fall back
+    // to matching by name when either side is missing an ID, so a renamed
+    // item's existing reservations still count against the new request
+    // instead of silently falling out of the overlap check.
+    var matches = (itemId && rowItemId) ? (rowItemId === itemId) : (rowItemName === itemName);
+    if (!matches || itemLibs.indexOf(rowLibrary) === -1 || status === 'Cancelled' || status === 'Returned' || status === 'Lost or Damaged') return;
+    var ep  = new Date(r[10]);  ep.setHours(0, 0, 0, 0);
+    var er  = new Date(r[12]); er.setHours(0, 0, 0, 0);
+    var qty = (r[8] && !isNaN(parseInt(r[8]))) ? parseInt(r[8]) : 1;
+    if (np <= er && nr >= ep) overlapping.push({ ep: ep, er: er, qty: qty });
+    if (nr < ep && (ep - nr) / DAY === 1) hasTight = true;
+    else if (np > er && (np - er) / DAY === 1) hasTight = true;
+  });
+  // Two reservations can each overlap the requested range without ever
+  // overlapping each other (e.g. back-to-back bookings before/after the
+  // new dates) — summing every overlapping row's qty would overcount.
+  // Instead, check the actual peak concurrent qty on each day the
+  // concurrency could change (the new request's start, plus every
+  // overlapping reservation's own start/end within the requested range).
+  var candidateDays = [np.getTime()];
+  overlapping.forEach(function(o) {
+    if (o.ep.getTime() >= np.getTime() && o.ep.getTime() <= nr.getTime()) candidateDays.push(o.ep.getTime());
+    if (o.er.getTime() >= np.getTime() && o.er.getTime() <= nr.getTime()) candidateDays.push(o.er.getTime());
+  });
+  var peakQty = 0;
+  candidateDays.forEach(function(ts) {
+    var dayQty = overlapping.reduce(function(sum, o) {
+      return sum + (ts >= o.ep.getTime() && ts <= o.er.getTime() ? o.qty : 0);
+    }, 0);
+    if (dayQty > peakQty) peakQty = dayQty;
+  });
+  if (peakQty + requestedQty > totalQty) return '✗ Unavailable';
+  if (hasTight) return '⚠ Tight turnaround';
+  return '✓ Available';
+}
+
+function colLetter(n) {
+  var s = '';
+  while (n > 0) { s = String.fromCharCode(64 + (n - 1) % 26 + 1) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
+
+function buildAvailabilityCalendar(libraryKey) {
+  var lib   = getLibrary(libraryKey);
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var inv   = ss.getSheetByName(INV_TAB).getDataRange().getValues();
+  var items = inv.filter(function(r) {
+    return String(r[COL_LIBRARY]).trim() === libraryKey &&
+           String(r[COL_CURRENTLY_HAVE]).toUpperCase() === 'Y' &&
+           r[COL_ITEM];
+  }).map(function(r) {
+    return {
+      id:    String(r[COL_ITEM_ID] || '').trim(),
+      brand: String(r[COL_BRAND]   || '').trim(),
+      name:  String(r[COL_ITEM]).trim(),
+      size:  String(r[COL_SIZE]    || '').trim()
+    };
+  }).filter(function(i) { return i.name; });
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var dates = [];
+  for (var i = 0; i < CALENDAR_DAYS; i++) {
+    var d = new Date(today); d.setDate(today.getDate() + i); dates.push(d);
+  }
+  var tabName = lib.tabAbbr + ' Avail';
+  var cal = ss.getSheetByName(tabName);
+  if (!cal) cal = ss.insertSheet(tabName);
+  else { cal.clearContents(); cal.clearFormats(); }
+  var headerRow = ['Item ID', 'Brand', 'Item Name', 'Size'];
+  for (var j = 0; j < dates.length; j++) headerRow.push(dates[j]);
+  cal.getRange(1, 1, 1, CALENDAR_DAYS + 4).setValues([headerRow]).setFontWeight('bold').setBackground('#e8e8e8');
+  cal.getRange(1, 5, 1, CALENDAR_DAYS).setNumberFormat('M/d');
+  cal.setFrozenRows(1); cal.setFrozenColumns(4);
+  if (!items.length) return;
+  cal.getRange(2, 1, items.length, 4).setValues(items.map(function(i) { return [i.id, i.brand, i.name, i.size]; }));
+  var formulas = [];
+  for (var r = 0; r < items.length; r++) {
+    var rowNum = r + 2;
+    var rowFormulas = [];
+    for (var c = 0; c < dates.length; c++) {
+      var col = colLetter(c + 5);
+      rowFormulas.push('=IF(SUMPRODUCT((Reservations!$H$2:$H$1000=$C' + rowNum + ')*(Reservations!$A$2:$A$1000="' + libraryKey + '")*(Reservations!$P$2:$P$1000<>"Cancelled")*(Reservations!$P$2:$P$1000<>"Returned")*(Reservations!$K$2:$K$1000<=' + col + '$1)*(Reservations!$M$2:$M$1000>=' + col + '$1)*IF(ISNUMBER(Reservations!$I$2:$I$1000),Reservations!$I$2:$I$1000,1))>=IFERROR(SUMPRODUCT((inventory!$E$2:$E$1000=$C' + rowNum + ')*(inventory!$B$2:$B$1000="' + libraryKey + '")*IF(ISNUMBER(inventory!$K$2:$K$1000),inventory!$K$2:$K$1000,1)),1),"X",IF(AND(' + col + '$1=TODAY(),COUNTIFS(Reservations!$H:$H,$C' + rowNum + ',Reservations!$A:$A,"' + libraryKey + '",Reservations!$P:$P,"<>Cancelled",Reservations!$P:$P,"<>Returned",Reservations!$M:$M,"<"&TODAY())>0),"!",""))');
+    }
+    formulas.push(rowFormulas);
+  }
+  cal.getRange(2, 5, items.length, CALENDAR_DAYS).setFormulas(formulas);
+  cal.getRange(2, 5, items.length, CALENDAR_DAYS).setHorizontalAlignment('center');
+  var dataRange = cal.getRange(2, 5, items.length, CALENDAR_DAYS);
+  cal.clearConditionalFormatRules();
+  cal.setConditionalFormatRules([
+    SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('X').setBackground('#ea4335').setFontColor('#ffffff').setRanges([dataRange]).build(),
+    SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('!').setBackground('#fbbc04').setFontColor('#000000').setRanges([dataRange]).build(),
+    SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('').setBackground('#34a853').setFontColor('#34a853').setRanges([dataRange]).build(),
+  ]);
+  cal.setColumnWidth(1, 80); cal.setColumnWidth(2, 120); cal.setColumnWidth(3, 250); cal.setColumnWidth(4, 100);
+  for (var c2 = 5; c2 <= CALENDAR_DAYS + 4; c2++) cal.setColumnWidth(c2, 55);
+  Logger.log('Calendar built for ' + lib.shortName + ': ' + items.length + ' items x ' + CALENDAR_DAYS + ' days.');
+}
+
+function buildCurrentlyOut(libraryKey) {
+  var lib  = getLibrary(libraryKey);
+  var ss   = SpreadsheetApp.getActiveSpreadsheet();
+  var rsvp = ss.getSheetByName(RSVP_TAB);
+  var tabName = lib.tabAbbr + ' Out';
+  var curr = ss.getSheetByName(tabName);
+  if (!curr) curr = ss.insertSheet(tabName);
+  else { curr.clearContents(); curr.clearFormats(); }
+  var headers = ['Item ID','Brand','Item Name','Size','Name','Email','Phone','Pickup Date','Return Date','Status','Days Remaining','Qty'];
+  curr.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold').setBackground('#f3f3f3');
+  curr.setFrozenRows(1);
+  var today = new Date(); today.setHours(0,0,0,0);
+  var activeRows = rsvp.getDataRange().getValues().slice(1).filter(function(r) {
+    var s = String(r[15]).trim();
+    return (s === 'Lent Out' || s === 'Added to existing request') && String(r[0]).trim() === libraryKey;
+  });
+  if (!activeRows.length) return;
+  var rows = activeRows.map(function(r) {
+    var ret = r[12] instanceof Date ? r[12] : new Date(r[12]);  // M: Return Date
+    var qty = (r[8] && !isNaN(parseInt(r[8]))) ? parseInt(r[8]) : 1;   // I: Qty Requested
+    return [r[5], r[6], r[7], r[9], r[2], r[3], r[4], r[10], r[12], r[15], Math.ceil((ret - today) / 86400000), qty];
+    // Item ID, Brand, Item Name, Size, Name, Email, Phone, Pickup Date, Return Date, Status, Days Remaining, Qty
+  }).sort(function(a, b) { return new Date(a[8]) - new Date(b[8]); });
+  curr.getRange(2, 1, rows.length, headers.length).setValues(rows);
+  curr.getRange(2, 8, rows.length, 2).setNumberFormat('M/d/yyyy');
+  curr.setColumnWidth(1, 80); curr.setColumnWidth(2, 120); curr.setColumnWidth(3, 200); curr.setColumnWidth(4, 100); curr.setColumnWidth(5, 150); curr.setColumnWidth(6, 200);
+  curr.setConditionalFormatRules([SpreadsheetApp.newConditionalFormatRule().whenNumberLessThan(0).setBackground('#ea4335').setFontColor('#ffffff').setRanges([curr.getRange(2, 11, rows.length, 1)]).build()]);
+}
+
+function sendReceiptEmail(data, items, libraryKey) {
+  var lib       = getLibrary(libraryKey);
+  var name      = data[2];
+  var email     = data[3];
+  var pickupDate = data[10] instanceof Date ? data[10] : new Date(data[10]);
+  var pickupTime = data[11];
+  var returnDate = data[12] instanceof Date ? data[12] : new Date(data[12]);
+  var returnTime = data[13];
+  var firstName = String(name).split(' ')[0];
+  var fmt      = function(d) { return Utilities.formatDate(d, Session.getScriptTimeZone(), 'MMMM d, yyyy'); };
+  var fmtShort = function(d) { return Utilities.formatDate(d, Session.getScriptTimeZone(), 'MMM d'); };
+  var fmtTime  = function(t) { return t || 'TBD'; };
+  function itemLabel(i) {
+    if (typeof i !== 'object') return String(i);
+    var label = i.name;
+    var details = [i.brand, i.size].filter(Boolean).join(', ');
+    if (details) label += ' (' + details + ')';
+    if (i.qty > 1) label += ' x' + i.qty;
+    return label;
+  }
+  var itemList = items.map(function(i) { return '- ' + itemLabel(i); }).join('\n');
+  var itemSection = items.length === 1
+    ? 'Item: ' + itemLabel(items[0]) + '\n\n'
+    : 'Items:\n' + itemList + '\n\n';
+  var subject = 'Lending library request received | ' + fmtShort(pickupDate) + ' – ' + fmtShort(returnDate);
+  var body =
+    'Hi ' + firstName + ',\n\n' +
+    'Thanks for your request at the ' + lib.name + '! We\'ve received it and will be in touch shortly.\n\n' +
+    itemSection +
+    'Requested pickup: ' + fmt(pickupDate) + ' at ' + fmtTime(pickupTime) + '\n' +
+    'Requested return: ' + fmt(returnDate) + ' at ' + fmtTime(returnTime) + '\n\n' +
+    'Once your reservation is confirmed on our end, you\'ll receive calendar invitations for pickup and return along with the address for the lending library.\n\n' +
+    'If you\'re driving, you\'re welcome to park temporarily in front of the house. The tow away signs are ours — just be mindful of street sweeping.\n\n' +
+    'In the meantime, check out our FAQs at sflendinglibrary.org for everything you need to know.\n\n' +
+    'Questions? Just reply to this email.\n\n' +
+    'Thanks,\nLauren';
+  GmailApp.sendEmail(email, subject, body, { bcc: Session.getEffectiveUser().getEmail() });
+}
+
+function reminderWhatsAppLink(phone) {
+  var digits = String(phone).replace(/\D/g, '');
+  if (digits.length === 10) digits = '1' + digits;
+  return 'https://wa.me/' + digits;
+}
+
+// Shared template for both the pickup and return reminder emails.
+// kind: 'pickup' or 'return'. dateFmt is the tomorrow date already
+// formatted (e.g. 'Friday, August 7'); time is that leg's requested time
+// window (pickup time for kind='pickup', return time for kind='return'),
+// or '' if not yet set.
+// Care instructions shown on the return reminder — only the ones relevant
+// to what's actually being returned, driven by each inventory item's Care
+// Tags column (comma-separated, e.g. "launder, parts"). Add a tag here and to
+// items in the sheet to introduce a new guideline; items with no tags don't
+// add any tag-driven bullets. Separately, a "keep items separate" bullet
+// shows automatically whenever a return covers more than one item — that
+// one isn't item-specific, so it's not a tag (see multiItemNote below).
+// The closing line always shows regardless of any of the above.
+var CARE_GUIDELINES = [
+  { tag: 'pieces', text: 'Ensure you\'re returning with all puzzle/game/toy pieces — for anything under 100 pieces, a manual count is appreciated' },
+  { tag: 'parts',  text: 'Double-check for stray parts (clips, chargers, small accessories) so nothing gets left behind' },
+  { tag: 'spot-clean', text: 'Spot clean if it\'s dirty — if a wipe won\'t cut it, go ahead and give it a proper wash before returning' },
+  { tag: 'wash', text: 'Clean, as appropriate, before returning — either in the laundry or dishwasher, or disinfecting by hand' },
+  { tag: 'batteries', text: 'Check that the batteries still work — swap in fresh ones before returning if not' },
+  { tag: 'fold',   text: 'Pack it up neatly, especially if it comes in any sort of carrying case' }
+];
+
+// Resolves collected tags to guideline text, grouped by item rather than
+// by tag — all of the first item's guidelines, then the second's, and so
+// on — so a multi-item return reads as "here's what to do for item A,
+// then item B" instead of interleaving by tag priority (which put a
+// second item's "parts" bullet ahead of the first item's "spot-clean"
+// bullet just because parts sorts earlier in CARE_GUIDELINES). itemOrder
+// is the item names in the order they should appear (matching the
+// "Returning" list); itemTags maps each item name to its tags, e.g.
+// { 'SlumberPod': ['spot-clean'], 'Fast Table Chair': ['wash', 'parts'] }.
+// When a return covers more than one item, a guideline unique to a single
+// item gets "(Item Name)" appended so it's clear which item it's about.
+// A guideline shared by more than one item — e.g. two puzzles both tagged
+// "pieces", or several Yoto cards all tagged "spot-clean" — collapses to
+// one unattributed bullet instead of repeating the identical line once
+// per item, since attribution wouldn't disambiguate anything once it
+// applies to more than one thing. Single-item returns skip attribution
+// entirely since there's nothing to disambiguate.
+function careGuidelinesByItem(itemOrder, itemTags, showAttribution) {
+  var order = [], byText = {};
+  itemOrder.forEach(function(itemName) {
+    var tags = itemTags[itemName] || [];
+    CARE_GUIDELINES.forEach(function(g) {
+      if (tags.indexOf(g.tag) === -1) return;
+      if (!byText[g.text]) { byText[g.text] = []; order.push(g.text); }
+      if (byText[g.text].indexOf(itemName) === -1) byText[g.text].push(itemName);
+    });
+  });
+  return order.map(function(text) {
+    var items = byText[text];
+    return (showAttribution && items.length === 1) ? text + ' (' + items[0] + ')' : text;
+  });
+}
+
+function buildReminderEmail(kind, firstName, lib, deco, dateFmt, time, items, careItems) {
+  var isPickup = kind === 'pickup';
+  careItems = careItems || [];
+  var verb = isPickup ? 'pickup' : 'return';
+  var stampText = isPickup ? 'Pickup Tomorrow' : 'Return Tomorrow';
+  var itemsLabel = isPickup ? 'Checked Out' : 'Returning';
+  var ctaVerb = isPickup ? 'pickup' : 'your return';
+  var waLink = reminderWhatsAppLink(lib.phone);
+  var whenText = time ? (dateFmt + ', ' + time) : dateFmt;
+  var timeNote = time ? '' : ' — time still to be confirmed';
+  var subject = 'Reminder: ' + lib.name + ' ' + verb + ' tomorrow';
+  var itemListHtml = items.map(function(i) { return '<div style="padding:3px 0;">• ' + i + '</div>'; }).join('');
+  // Not item-specific, so it lives outside CARE_GUIDELINES/tags — shows
+  // whenever a return covers more than one item, regardless of what's tagged.
+  var multiItemNote = (!isPickup && items.length > 1)
+    ? 'Returning more than one item? Keep them separate — nothing tucked inside something else (easy for me to miss when I\'m putting things away!)'
+    : '';
+  var careBulletItems = multiItemNote ? careItems.concat([multiItemNote]) : careItems;
+  var careBulletsHtml = careBulletItems.map(function(i) { return '<div style="padding:3px 0;">• ' + i + '</div>'; }).join('');
+  var careHtml = (isPickup || !careBulletsHtml) ? '' :
+    '<div style="margin-top:14px;">' +
+      '<div style="font-size: ' + REMINDER_FS_XS + '; text-transform:uppercase; letter-spacing:1px; color:' + REMINDER_STAMP_COLOR + '; margin-bottom:8px; font-weight:bold;">Before You Return</div>' +
+      '<div style="font-size: ' + REMINDER_FS_BASE + '; color:#1F2C3D;">' + careBulletsHtml + '</div>' +
+    '</div>';
+  var html =
+    '<div style="font-family: \'Courier New\', Courier, monospace; font-size: ' + REMINDER_FS_BASE + '; line-height: 1.6; max-width: 480px; margin: 0 auto; background:#F3ECDC; padding: 28px 16px;">' +
+      '<div style="text-align:center; margin-bottom: 20px;">' +
+        '<div style="font-size: ' + REMINDER_FS_XS + '; letter-spacing: 3px; text-transform: uppercase; color:#1F2C3D;">✦ SF Lending Library ✦</div>' +
+      '</div>' +
+      '<div style="background:#FFFDF7; border: 1px solid #E3D9BF; border-top: 4px solid ' + deco.color + '; border-radius: 4px; padding: 26px 22px;">' +
+        '<div style="text-align:center; margin-bottom: 20px;">' +
+          '<div style="display:inline-block; border: 3px double ' + REMINDER_STAMP_COLOR + '; border-radius: 6px; padding: 8px 22px 5px; transform: rotate(-4deg);">' +
+            '<div style="font-size: ' + REMINDER_FS_STAMP + '; letter-spacing: 2px; text-transform: uppercase; color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">' + stampText + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<p style="font-size: ' + REMINDER_FS_BASE + '; color:#1F2C3D; margin:0 0 12px;">Hi ' + firstName + ',</p>' +
+        '<p style="font-size: ' + REMINDER_FS_BASE + '; color:#1F2C3D; margin:0 0 16px;">Quick reminder — your ' + lib.shortName + ' ' + verb + ' is tomorrow, ' + whenText + timeNote + '.</p>' +
+        '<div style="border-top: 1px dashed #E3D9BF; border-bottom: 1px dashed #E3D9BF; padding: 14px 0; margin: 0 0 16px;">' +
+          '<div style="font-size: ' + REMINDER_FS_XS + '; text-transform:uppercase; letter-spacing:1px; color:' + REMINDER_STAMP_COLOR + '; margin-bottom:8px; font-weight:bold;">' + itemsLabel + '</div>' +
+          '<div style="font-size: ' + REMINDER_FS_BASE + '; color:#1F2C3D;">' + itemListHtml + '</div>' +
+          careHtml +
+        '</div>' +
+        '<div style="font-size: ' + REMINDER_FS_XS + '; text-transform:uppercase; letter-spacing:1px; color:' + REMINDER_STAMP_COLOR + '; margin-bottom:8px; font-weight:bold;">To Do</div>' +
+        '<div style="border-left: 3px solid ' + REMINDER_STAMP_COLOR + '; background:#F7E4E0; padding: 12px 16px; margin: 0 0 18px; border-radius: 2px; color:#1F2C3D; font-size: ' + REMINDER_FS_BASE + ';">' +
+          '<table role="presentation" cellpadding="0" cellspacing="0" style="display:inline-block; vertical-align:middle; margin-right:10px;"><tr><td style="width:24px; height:24px; border:2px solid ' + REMINDER_STAMP_COLOR + '; border-radius:4px; text-align:center; vertical-align:middle; font-size:17px; line-height:24px; font-weight:bold; color:' + REMINDER_STAMP_COLOR + ';">&#10003;</td></tr></table>' +
+          '<a href="' + waLink + '" style="color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">WhatsApp me</a> today to confirm and coordinate ' + ctaVerb + '.' +
+        '</div>' +
+        '<p style="font-size: ' + REMINDER_FS_BASE + '; color:#4E5A6B; margin:0 0 16px;">Address &amp; parking details are in your calendar invite. Questions? <a href="https://www.sflendinglibrary.org" style="color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">www.sflendinglibrary.org</a></p>' +
+        '<p style="font-size: ' + REMINDER_FS_BASE + '; color:#1F2C3D; margin:0;">See you soon!<br>Lauren</p>' +
+      '</div>' +
+      '<div style="text-align:center; margin-top: 18px;">' +
+        '<div style="font-size: ' + REMINDER_FS_XS + '; letter-spacing: 2px; text-transform: uppercase; color:#8A97A6;"><span style="text-decoration: line-through; opacity: 0.65;">Buy</span> &middot; Borrow &middot; Return &middot; Repeat</div>' +
+      '</div>' +
+    '</div>';
+  var careText = (isPickup || !careBulletItems.length) ? '' :
+    '\nBEFORE YOU RETURN\n' + careBulletItems.map(function(i) { return '- ' + i; }).join('\n') + '\n';
+  var text =
+    '✦ SF LENDING LIBRARY ✦\n\n' +
+    stampText.toUpperCase() + '\n\n' +
+    'Hi ' + firstName + ',\n\n' +
+    'Quick reminder — your ' + lib.shortName + ' ' + verb + ' is tomorrow, ' + whenText + timeNote + '.\n\n' +
+    itemsLabel.toUpperCase() + '\n' + items.map(function(i) { return '- ' + i; }).join('\n') + '\n' +
+    careText + '\n' +
+    'TO DO\n' +
+    '[ ] WhatsApp me at ' + lib.phone + ' today to confirm and coordinate ' + ctaVerb + ': ' + waLink + '\n\n' +
+    'Address & parking details are in your calendar invite. Questions? www.sflendinglibrary.org\n\n' +
+    'See you soon!\nLauren';
+  return { subject: subject, html: html, text: text };
+}
+
+function sendPickupReminders() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
+  var rows  = sheet.getDataRange().getValues().slice(1);
+  var tz    = Session.getScriptTimeZone();
+  var props = PropertiesService.getScriptProperties();
+  // The next calendar date, not "24 hours from now" — this is why the 8am
+  // and 4pm runs always agree on what "tomorrow" is and the copy stays
+  // accurate regardless of which run actually sends the email.
+  var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(0, 0, 0, 0);
+  function isTomorrow(d) {
+    var dt = d instanceof Date ? d : new Date(d); dt.setHours(0, 0, 0, 0);
+    return dt.getTime() === tomorrow.getTime();
+  }
+  function itemLabel(r) {
+    var qty = parseInt(r[8]); if (isNaN(qty) || qty < 1) qty = 1;
+    var label = String(r[7]).trim();
+    var details = [String(r[6] || '').trim(), String(r[9] || '').trim()].filter(Boolean).join(', ');
+    if (details) label += ' (' + details + ')';
+    if (qty > 1) label += ' x' + qty;
+    return label;
+  }
+  // Group by borrower + library + pickup time so one email covers all their items
+  var groups = {}, order = [];
+  rows.forEach(function(r) {
+    var status = String(r[15]).trim();
+    if (status !== 'Confirmed' && status !== 'Added to existing request') return;
+    if (!isTomorrow(r[10])) return;
+    var email = String(r[3]).trim();
+    var libraryKey = String(r[0]).trim();
+    if (!email || !libraryKey) return;
+    var key = libraryKey + '|' + email + '|' + String(r[11] || '').trim();
+    if (!groups[key]) {
+      order.push(key);
+      groups[key] = { library: libraryKey, name: String(r[2]).trim(), email: email, time: String(r[11] || '').trim(), items: [] };
+    }
+    groups[key].items.push(itemLabel(r));
+  });
+  var pickupFmt = Utilities.formatDate(tomorrow, tz, 'EEEE, MMMM d');
+  var todayFmt = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  order.forEach(function(key) {
+    var g = groups[key];
+    var sentKey = 'pickupReminder_' + key.replace(/[^a-z0-9]/gi, '_') + '_' + todayFmt;
+    if (props.getProperty(sentKey)) return;
+    var lib = getLibrary(g.library);
+    var deco = REMINDER_DECOR[g.library] || REMINDER_DECOR['kid-gear'];
+    var firstName = g.name.split(' ')[0];
+    var email = buildReminderEmail('pickup', firstName, lib, deco, pickupFmt, g.time, g.items);
+    GmailApp.sendEmail(g.email, email.subject, email.text, { htmlBody: email.html, bcc: Session.getEffectiveUser().getEmail() });
+    props.setProperty(sentKey, 'sent');
+  });
+}
+
+function sendReturnReminders() {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(RSVP_TAB);
+  var rows  = sheet.getDataRange().getValues().slice(1);
+  var invRows = ss.getSheetByName(INV_TAB).getDataRange().getValues();
+  var tz    = Session.getScriptTimeZone();
+  var props = PropertiesService.getScriptProperties();
+  var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(0, 0, 0, 0);
+  function isTomorrow(d) {
+    var dt = d instanceof Date ? d : new Date(d); dt.setHours(0, 0, 0, 0);
+    return dt.getTime() === tomorrow.getTime();
+  }
+  function itemLabel(r) {
+    var qty = parseInt(r[8]); if (isNaN(qty) || qty < 1) qty = 1;
+    var label = String(r[7]).trim();
+    var details = [String(r[6] || '').trim(), String(r[9] || '').trim()].filter(Boolean).join(', ');
+    if (details) label += ' (' + details + ')';
+    if (qty > 1) label += ' x' + qty;
+    return label;
+  }
+  // Group by borrower + library + return time so one email covers all their
+  // items, collecting which item(s) carried each care tag (not just
+  // whether the tag showed up at all) so the "Before You Return" section
+  // can say which item a guideline is about when a return mixes items
+  // with different tags.
+  var groups = {}, order = [];
+  rows.forEach(function(r) {
+    var status = String(r[15]).trim();
+    if (status !== 'Lent Out' && status !== 'Added to existing request') return;
+    if (!isTomorrow(r[12])) return;
+    var email = String(r[3]).trim();
+    var libraryKey = String(r[0]).trim();
+    if (!email || !libraryKey) return;
+    var key = libraryKey + '|' + email + '|' + String(r[13] || '').trim();
+    if (!groups[key]) {
+      order.push(key);
+      groups[key] = { library: libraryKey, name: String(r[2]).trim(), email: email, time: String(r[13] || '').trim(), items: [], careItemOrder: [], careTagsByItem: {} };
+    }
+    groups[key].items.push(itemLabel(r));
+    var itemName = String(r[7]).trim();
+    var itemId = String(r[5] || '').trim();
+    var tags = getItemCareTags(itemId, itemName, libraryKey, invRows);
+    if (tags.length) {
+      if (groups[key].careItemOrder.indexOf(itemName) === -1) groups[key].careItemOrder.push(itemName);
+      if (!groups[key].careTagsByItem[itemName]) groups[key].careTagsByItem[itemName] = [];
+      tags.forEach(function(tag) {
+        if (groups[key].careTagsByItem[itemName].indexOf(tag) === -1) groups[key].careTagsByItem[itemName].push(tag);
+      });
+    }
+  });
+  var returnFmt = Utilities.formatDate(tomorrow, tz, 'EEEE, MMMM d');
+  var todayFmt = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  order.forEach(function(key) {
+    var g = groups[key];
+    var sentKey = 'returnReminder_' + key.replace(/[^a-z0-9]/gi, '_') + '_' + todayFmt;
+    if (props.getProperty(sentKey)) return;
+    var lib = getLibrary(g.library);
+    var deco = REMINDER_DECOR[g.library] || REMINDER_DECOR['kid-gear'];
+    var firstName = g.name.split(' ')[0];
+    var careItems = careGuidelinesByItem(g.careItemOrder, g.careTagsByItem, g.items.length > 1);
+    var email = buildReminderEmail('return', firstName, lib, deco, returnFmt, g.time, g.items, careItems);
+    GmailApp.sendEmail(g.email, email.subject, email.text, { htmlBody: email.html, bcc: Session.getEffectiveUser().getEmail() });
+    props.setProperty(sentKey, 'sent');
+  });
+}
+
+// Sends real (non-draft) sample reminders to yourself, so you can check
+// rendering in an actual received email rather than Gmail's compose editor
+// (which strips a lot of the CSS this template uses). Run these directly
+// from the Apps Script editor's function dropdown. Change libraryKey below
+// to preview a different library's shelf color.
+function testPickupReminderEmail() {
+  var libraryKey = 'party';
+  var lib = getLibrary(libraryKey);
+  var deco = REMINDER_DECOR[libraryKey] || REMINDER_DECOR['kid-gear'];
+  var tz = Session.getScriptTimeZone();
+  var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+  var pickupFmt = Utilities.formatDate(tomorrow, tz, 'EEEE, MMMM d');
+  var email = buildReminderEmail('pickup', 'Maria', lib, deco, pickupFmt, '4pm - 6pm', ['Bubble Machine (Little Tikes)', 'Balloon Arch Kit']);
+  GmailApp.sendEmail(Session.getEffectiveUser().getEmail(), '[TEST] ' + email.subject, email.text, { htmlBody: email.html });
+  Logger.log('Test pickup reminder sent to ' + Session.getEffectiveUser().getEmail());
+}
+
+// Uses real inventory Care Tags for the sample items below — a quick way to
+// confirm your tagging is actually producing the guidelines you expect.
+// Change itemNames/libraryKey to preview a different item's real tags.
+function testReturnReminderEmail() {
+  var libraryKey = 'party';
+  var lib = getLibrary(libraryKey);
+  var deco = REMINDER_DECOR[libraryKey] || REMINDER_DECOR['kid-gear'];
+  var tz = Session.getScriptTimeZone();
+  var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+  var returnFmt = Utilities.formatDate(tomorrow, tz, 'EEEE, MMMM d');
+  var itemNames = ['Bubble Machine', 'Balloon Arch Kit'];
+  var invRows = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(INV_TAB).getDataRange().getValues();
+  var careItemOrder = [], careTagsByItem = {};
+  itemNames.forEach(function(name) {
+    var tags = getItemCareTags('', name, libraryKey, invRows);
+    if (!tags.length) return;
+    if (careItemOrder.indexOf(name) === -1) careItemOrder.push(name);
+    careTagsByItem[name] = tags;
+  });
+  var email = buildReminderEmail('return', 'Maria', lib, deco, returnFmt, '4pm - 6pm', ['Bubble Machine (Little Tikes)', 'Balloon Arch Kit'], careGuidelinesByItem(careItemOrder, careTagsByItem, itemNames.length > 1));
+  GmailApp.sendEmail(Session.getEffectiveUser().getEmail(), '[TEST] ' + email.subject, email.text, { htmlBody: email.html });
+  Logger.log('Test return reminder sent to ' + Session.getEffectiveUser().getEmail() + ' — care tags found: ' + JSON.stringify(careTagsByItem));
+}
+
+function sendPendingReceipts() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
+  var rows  = sheet.getDataRange().getValues().slice(1);
+  var tz    = Session.getScriptTimeZone();
+  var props = PropertiesService.getScriptProperties();
+  var seen  = {};
+  rows.forEach(function(r) {
+    if (String(r[15]).trim() !== 'Pending') return;
+    var email      = String(r[3]).trim();
+    var libraryKey = String(r[0]).trim();
+    if (!email || !libraryKey) return;
+    var pickupDate = r[10] instanceof Date ? r[10] : new Date(r[10]);
+    var returnDate = r[12] instanceof Date ? r[12] : new Date(r[12]);
+    if (isNaN(pickupDate.getTime()) || isNaN(returnDate.getTime())) return;
+    var pickupFmt = Utilities.formatDate(pickupDate, tz, 'yyyy-MM-dd');
+    var returnFmt = Utilities.formatDate(returnDate, tz, 'yyyy-MM-dd');
+    var tsFmt     = r[1] instanceof Date ? Utilities.formatDate(r[1], tz, 'yyyy-MM-dd HH:mm:ss') : String(r[1]);
+    var key = 'receipt_' + libraryKey + '_' + email.replace(/[^a-z0-9]/gi, '_') + '_' + pickupFmt + '_' + returnFmt + '_' + tsFmt.replace(/[^0-9]/g, '');
+    if (seen[key] || props.getProperty(key)) return;
+    seen[key] = true;
+    // Gather all items for this submission (same email + library + dates + timestamp)
+    var items = rows
+      .filter(function(sr) {
+        if (String(sr[0]).trim() !== libraryKey || String(sr[3]).trim() !== email) return false;
+        var sp  = sr[10] instanceof Date ? Utilities.formatDate(sr[10], tz, 'yyyy-MM-dd') : String(sr[10]);
+        var sr2 = sr[12] instanceof Date ? Utilities.formatDate(sr[12], tz, 'yyyy-MM-dd') : String(sr[12]);
+        var sts = sr[1]  instanceof Date ? Utilities.formatDate(sr[1],  tz, 'yyyy-MM-dd HH:mm:ss') : String(sr[1]);
+        return sp === pickupFmt && sr2 === returnFmt && sts === tsFmt;
+      })
+      .map(function(sr) {
+        var qty = (sr[8] && !isNaN(parseInt(sr[8]))) ? parseInt(sr[8]) : 1;
+        return { name: String(sr[7]).trim(), brand: String(sr[6] || '').trim(), size: String(sr[9] || '').trim(), qty: qty };
+      });
+    try {
+      sendReceiptEmail(r, items, libraryKey);
+      props.setProperty(key, 'true');
+    } catch(e) { Logger.log('Receipt email error for ' + email + ': ' + e.message); }
+  });
+}
+
+function maybeSendCombinedConfirmation(row) {
+  var sheet      = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
+  var data       = sheet.getRange(row, 1, 1, 17).getValues()[0];
+  var status     = String(data[15]).trim();  // P
+  var email      = String(data[3]).trim();   // D
+  var libraryKey = String(data[0]).trim();   // A
+  if (!email || !libraryKey) return;
+  var tz        = Session.getScriptTimeZone();
+  var pickupFmt = data[10] instanceof Date ? Utilities.formatDate(data[10], tz, 'yyyy-MM-dd') : String(data[10]);
+  var returnFmt = data[12] instanceof Date ? Utilities.formatDate(data[12], tz, 'yyyy-MM-dd') : String(data[12]);
+  var tsFmt     = data[1]  instanceof Date ? Utilities.formatDate(data[1],  tz, 'yyyy-MM-dd HH:mm:ss') : String(data[1]);
+  if (!pickupFmt || !returnFmt) return;
+  // Find all rows for this submission (same email + library + dates + timestamp)
+  var allRows = sheet.getDataRange().getValues();
+  var siblingRows = [];
+  for (var i = 1; i < allRows.length; i++) {
+    if (String(allRows[i][0]).trim() !== libraryKey) continue;
+    if (String(allRows[i][3]).trim() !== email) continue;
+    var rPickup = allRows[i][10] instanceof Date ? Utilities.formatDate(allRows[i][10], tz, 'yyyy-MM-dd') : String(allRows[i][10]);
+    var rReturn = allRows[i][12] instanceof Date ? Utilities.formatDate(allRows[i][12], tz, 'yyyy-MM-dd') : String(allRows[i][12]);
+    var rTs     = allRows[i][1]  instanceof Date ? Utilities.formatDate(allRows[i][1],  tz, 'yyyy-MM-dd HH:mm:ss') : String(allRows[i][1]);
+    if (rPickup !== pickupFmt || rReturn !== returnFmt || rTs !== tsFmt) continue;
+    siblingRows.push(allRows[i]);
+  }
+  // Wait until every sibling row has been actioned (anything other than Pending)
+  var allActioned = siblingRows.every(function(r) { return String(r[15]).trim() !== 'Pending'; });
+  if (!allActioned) return;
+  // Only send for items that were confirmed
+  var confirmedItems = siblingRows
+    .filter(function(r) { return String(r[15]).trim() === 'Confirmed'; })
+    .map(function(r) {
+      var qty = (r[8] && !isNaN(parseInt(r[8]))) ? parseInt(r[8]) : 1;
+      return { name: String(r[7]).trim(), brand: String(r[6] || '').trim(), size: String(r[9] || '').trim(), qty: qty };
+    });
+  if (!confirmedItems.length) return; // everything was cancelled, nothing to send
+  // Per-submission dedup (includes timestamp to handle same-person same-dates repeat bookings)
+  var sentKey = 'sent_' + libraryKey + '_' + email.replace(/[^a-z0-9]/gi, '_') + '_' + pickupFmt + '_' + returnFmt + '_' + tsFmt.replace(/[^0-9]/g, '');
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var props = PropertiesService.getScriptProperties();
+    if (props.getProperty(sentKey)) return;
+    props.setProperty(sentKey, 'true');
+  } finally { lock.releaseLock(); }
+  try {
+    sendCalendarInvites(data, confirmedItems, libraryKey);
+  } catch(e) {
+    PropertiesService.getScriptProperties().deleteProperty(sentKey);
+    Logger.log('Calendar invite failed for ' + sentKey + ': ' + e.message);
+  }
+}
+
+function sendCalendarInvites(data, items, libraryKey) {
+  var lib        = getLibrary(libraryKey);
+  var name       = data[2];
+  var email      = data[3];
+  var phone      = data[4];
+  var pickupDate = data[10] instanceof Date ? data[10] : new Date(data[10]);
+  var pickupTime = data[11];
+  var returnDate = data[12] instanceof Date ? data[12] : new Date(data[12]);
+  var returnTime = data[13];
+  var firstName  = String(name).split(' ')[0];
+  function itemLabel(i) {
+    if (typeof i !== 'object') return String(i);
+    var label = i.name;
+    var details = [i.brand, i.size].filter(Boolean).join(', ');
+    if (details) label += ' (' + details + ')';
+    if (i.qty > 1) label += ' x' + i.qty;
+    return label;
+  }
+  var itemList = items.map(function(i) { return '- ' + itemLabel(i); }).join('\n');
+  var pickupStart = combineDateAndTime(pickupDate, pickupTime);
+  var pickupEnd   = new Date(pickupStart.getTime() + 60 * 60 * 1000);
+  var returnStart = combineDateAndTime(returnDate, returnTime);
+  var returnEnd   = new Date(returnStart.getTime() + 60 * 60 * 1000);
+  var multiUnit = items.filter(function(i) { return typeof i === 'object' && i.qty > 1; });
+  var multiUnitBanner = multiUnit.length
+    ? '⚠️ MULTIPLE UNITS: ' + multiUnit.map(function(i) { return i.name + ' x' + i.qty; }).join(', ') + '\n\n'
+    : '';
+  var tz = Session.getScriptTimeZone();
+  var pickupFmt = Utilities.formatDate(new Date(pickupDate), tz, 'EEE, MMM d');
+  var returnFmt = Utilities.formatDate(new Date(returnDate), tz, 'EEE, MMM d');
+  var pickupDesc =
+    multiUnitBanner +
+    firstName + ': ' + phone + '\nLauren: ' + lib.phone + '\n\n' +
+    firstName + ' picking up:\n' + itemList + '\n\n' +
+    'Return date: ' + returnFmt + '\n\n' +
+    'PARKING & MISC\n' +
+    'Feel free to park temporarily in front of the house — the tow away signs are ours. Check street sweeping times before you arrive (M/W/F 9 - 11am). Lastly, we have a very friendly but barky dog, she\'ll likely say hi!\n\n' +
+    'CHECKLIST\n' +
+    '☐ Text or WhatsApp Lauren the day before to confirm pickup details\n' +
+    '☐ Pick up your items at ' + lib.address.split(',')[0] + '\n' +
+    '☐ Text or WhatsApp Lauren once you\'ve picked up (if not in person)\n' +
+    '☐ Questions? sflendinglibrary.org';
+  var returnDesc =
+    multiUnitBanner +
+    firstName + ': ' + phone + '\nLauren: ' + lib.phone + '\n\n' +
+    'Returning:\n' + itemList + '\n\n' +
+    'Pickup date: ' + pickupFmt + '\n\n' +
+    'CHECKLIST\n' +
+    '☐ Text or WhatsApp Lauren the day before to confirm return details\n' +
+    '☐ Return items in the same condition you borrowed them\n' +
+    '☐ Text or WhatsApp Lauren once you\'ve returned (if not in person)\n' +
+    '☐ Loved it? Consider a donation to keep the library going — Venmo @lrturon\n' +
+    '☐ Questions? sflendinglibrary.org';
+  Calendar.Events.insert({
+    summary: firstName + ' <> ' + lib.name + ' Pickup',
+    location: lib.address,
+    description: pickupDesc,
+    start: { dateTime: pickupStart.toISOString(), timeZone: tz },
+    end:   { dateTime: pickupEnd.toISOString(),   timeZone: tz },
+    attendees: [{ email: email }],
+    transparency: 'transparent',
+    colorId: '3'
+  }, 'primary', { sendUpdates: 'all' });
+  Calendar.Events.insert({
+    summary: firstName + ' <> ' + lib.name + ' Return',
+    location: lib.address,
+    description: returnDesc,
+    start: { dateTime: returnStart.toISOString(), timeZone: tz },
+    end:   { dateTime: returnEnd.toISOString(),   timeZone: tz },
+    attendees: [{ email: email }],
+    transparency: 'transparent',
+    colorId: '3'
+  }, 'primary', { sendUpdates: 'all' });
+}
+
+function sendPendingInvites() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
+  var rows  = sheet.getDataRange().getValues().slice(1);
+  var tz    = Session.getScriptTimeZone();
+  var props = PropertiesService.getScriptProperties();
+  var seen  = {};
+  rows.forEach(function(r) {
+    var status     = String(r[15]).trim();
+    var email      = String(r[3]).trim();
+    var libraryKey = String(r[0]).trim();
+    if (!email || !libraryKey) return;
+    if (status === 'Pending' || status === 'Cancelled' || status === 'Returned' || status === 'Lost or Damaged' || status === 'Added to existing request') return;
+    var pickupDate = r[10] instanceof Date ? r[10] : new Date(r[10]);
+    var returnDate = r[12] instanceof Date ? r[12] : new Date(r[12]);
+    if (isNaN(pickupDate.getTime()) || isNaN(returnDate.getTime())) return;
+    var pickupFmt = Utilities.formatDate(pickupDate, tz, 'yyyy-MM-dd');
+    var returnFmt = Utilities.formatDate(returnDate, tz, 'yyyy-MM-dd');
+    var tsFmt     = r[1] instanceof Date ? Utilities.formatDate(r[1], tz, 'yyyy-MM-dd HH:mm:ss') : String(r[1]);
+    var sentKey   = 'sent_' + libraryKey + '_' + email.replace(/[^a-z0-9]/gi, '_') + '_' + pickupFmt + '_' + returnFmt + '_' + tsFmt.replace(/[^0-9]/g, '');
+    if (seen[sentKey] || props.getProperty(sentKey)) return;
+    seen[sentKey] = true;
+    // Find all sibling rows for this submission
+    var siblingRows = rows.filter(function(sr) {
+      if (String(sr[0]).trim() !== libraryKey || String(sr[3]).trim() !== email) return false;
+      var sp  = sr[10] instanceof Date ? Utilities.formatDate(sr[10], tz, 'yyyy-MM-dd') : String(sr[10]);
+      var sr2 = sr[12] instanceof Date ? Utilities.formatDate(sr[12], tz, 'yyyy-MM-dd') : String(sr[12]);
+      var sts = sr[1]  instanceof Date ? Utilities.formatDate(sr[1],  tz, 'yyyy-MM-dd HH:mm:ss') : String(sr[1]);
+      return sp === pickupFmt && sr2 === returnFmt && sts === tsFmt;
+    });
+    // Wait until all siblings are actioned
+    if (!siblingRows.every(function(sr) { return String(sr[15]).trim() !== 'Pending'; })) return;
+    var confirmedItems = siblingRows
+      .filter(function(sr) { return String(sr[15]).trim() === 'Confirmed'; })
+      .map(function(sr) {
+        var qty = (sr[8] && !isNaN(parseInt(sr[8]))) ? parseInt(sr[8]) : 1;
+        return { name: String(sr[7]).trim(), brand: String(sr[6] || '').trim(), size: String(sr[9] || '').trim(), qty: qty };
+      });
+    if (!confirmedItems.length) return;
+    var lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(10000);
+      if (props.getProperty(sentKey)) return;
+      props.setProperty(sentKey, 'true');
+    } finally { lock.releaseLock(); }
+    try {
+      sendCalendarInvites(r, confirmedItems, libraryKey);
+      Logger.log('sendPendingInvites: sent invites for ' + r[2] + ' (' + libraryKey + ' ' + pickupFmt + ')');
+    } catch(e) {
+      props.deleteProperty(sentKey);
+      Logger.log('sendPendingInvites error for ' + email + ': ' + e.message);
+    }
+  });
+}
+
+function onSheetEdit(e) {
+  var sheetName = e.range.getSheet().getName();
+  if (sheetName === RSVP_TAB && e.range.getColumn() === RSVP_STATUS_COL) {
+    var libKey = String(e.range.getSheet().getRange(e.range.getRow(), RSVP_LIBRARY_COL).getValue()).trim();
+    var newStatus = String(e.value || '').trim();
+    if (newStatus && newStatus !== 'Pending') { maybeSendCombinedConfirmation(e.range.getRow()); }
+    clearAvailabilityCache(libKey || null);
+    colorizeReservations();
+  }
+}
+
+function auditCalendarInvites() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
+  var rows  = sheet.getDataRange().getValues().slice(1);
+  var cal   = CalendarApp.getDefaultCalendar();
+  var tz    = Session.getScriptTimeZone();
+  var missing = [];
+  var seen  = {};
+  rows.forEach(function(r) {
+    var status = String(r[15]).trim(); // P: Status
+    if (status !== 'Confirmed' && status !== 'Lent Out' && status !== 'Added to existing request') return;
+    var email      = String(r[3]).trim();
+    var libraryKey = String(r[0]).trim();
+    var pickupDate = r[10] instanceof Date ? r[10] : new Date(r[10]);
+    var returnDate = r[12] instanceof Date ? r[12] : new Date(r[12]);
+    if (!email || isNaN(pickupDate.getTime()) || isNaN(returnDate.getTime())) return;
+    var pickupFmt = Utilities.formatDate(pickupDate, tz, 'yyyy-MM-dd');
+    var returnFmt = Utilities.formatDate(returnDate, tz, 'yyyy-MM-dd');
+    var key = email + '_' + libraryKey + '_' + pickupFmt + '_' + returnFmt;
+    if (seen[key]) return;
+    seen[key] = true;
+    var name      = String(r[2]).trim();
+    var firstName = name.split(' ')[0];
+    var pDayStart = new Date(pickupDate); pDayStart.setHours(0,0,0,0);
+    var pDayEnd   = new Date(pickupDate); pDayEnd.setHours(23,59,59,999);
+    var rDayStart = new Date(returnDate); rDayStart.setHours(0,0,0,0);
+    var rDayEnd   = new Date(returnDate); rDayEnd.setHours(23,59,59,999);
+    var lib2 = getLibrary(libraryKey);
+    var libNameClean = lib2.name.replace(/'/g, '');
+    var pickupEvents = cal.getEvents(pDayStart, pDayEnd, { search: firstName + ' <> ' + libNameClean + ' Pickup' });
+    var returnEvents = cal.getEvents(rDayStart, rDayEnd, { search: firstName + ' <> ' + libNameClean + ' Return' });
+    if (!pickupEvents.length || !returnEvents.length) {
+      var issues = [];
+      if (!pickupEvents.length) issues.push('missing pickup invite (' + Utilities.formatDate(pickupDate, tz, 'MMM d') + ')');
+      if (!returnEvents.length) issues.push('missing return invite (' + Utilities.formatDate(returnDate, tz, 'MMM d') + ')');
+      missing.push(name + ' <' + email + '> — ' + libraryKey + ' — ' + issues.join(', '));
+    }
+  });
+  var me = Session.getEffectiveUser().getEmail();
+  if (missing.length) {
+    GmailApp.sendEmail(me, 'Lending Library: ' + missing.length + ' reservation(s) missing calendar invites',
+      'The following confirmed reservations appear to be missing calendar invites:\n\n' +
+      missing.join('\n') + '\n\n' +
+      'The sendPendingInvites trigger will retry automatically within 5 minutes. If invites are still missing after 10 minutes, run clearScriptProperties() then run sendPendingInvites() manually.');
+  } else {
+    GmailApp.sendEmail(me, 'Lending Library: calendar audit complete — all clear',
+      'All confirmed and lent-out reservations have calendar invites. No action needed.');
+  }
+}
+
+function nightlyAudit() {
+  var ss      = SpreadsheetApp.getActiveSpreadsheet();
+  var invRows = ss.getSheetByName(INV_TAB).getDataRange().getValues();
+  var rows    = ss.getSheetByName(RSVP_TAB).getDataRange().getValues().slice(1);
+  var tz      = Session.getScriptTimeZone();
+  var today   = new Date(); today.setHours(0, 0, 0, 0);
+
+  // --- Double bookings ---
+  var ACTIVE  = ['Pending', 'Confirmed', 'Lent Out', 'Added to existing request'];
+  var active  = rows.map(function(r, i) { return { r: r, rowNum: i + 2 }; })
+                    .filter(function(x) { return ACTIVE.indexOf(String(x.r[15]).trim()) !== -1; });
+  var conflicts = [];
+  var seenItems = {};
+  active.forEach(function(x) {
+    var itemId     = String(x.r[5] || '').trim();
+    var itemName   = String(x.r[7]).trim();
+    var libraryKey = String(x.r[0]).trim();
+    var itemKey    = libraryKey + '|' + (itemId || itemName);
+    if (seenItems[itemKey]) return;
+    seenItems[itemKey] = true;
+    var totalQty = getItemQty(itemId, itemName, libraryKey, invRows);
+    var itemRows = active.filter(function(y) {
+      var yId = String(y.r[5] || '').trim();
+      return (itemId && yId) ? (yId === itemId) : (String(y.r[7]).trim() === itemName);
+    }).filter(function(y) { return String(y.r[0]).trim() === libraryKey; });
+    // Collect all boundary dates and check concurrent demand at each
+    var dates = [];
+    itemRows.forEach(function(y) {
+      var ep = new Date(y.r[10] instanceof Date ? y.r[10] : new Date(y.r[10])); ep.setHours(0,0,0,0);
+      var er = new Date(y.r[12] instanceof Date ? y.r[12] : new Date(y.r[12])); er.setHours(0,0,0,0);
+      dates.push(ep.getTime()); dates.push(er.getTime());
+    });
+    dates = dates.filter(function(v, i, a) { return a.indexOf(v) === i; }).sort(function(a, b) { return a - b; });
+    var maxQty = 0, worstDate = null, worstRows = [];
+    dates.forEach(function(ts) {
+      var d = new Date(ts);
+      var dayRows = itemRows.filter(function(y) {
+        var ep = new Date(y.r[10] instanceof Date ? y.r[10] : new Date(y.r[10])); ep.setHours(0,0,0,0);
+        var er = new Date(y.r[12] instanceof Date ? y.r[12] : new Date(y.r[12])); er.setHours(0,0,0,0);
+        return d >= ep && d <= er;
+      });
+      var dayQty = dayRows.reduce(function(sum, y) { return sum + ((y.r[8] && !isNaN(parseInt(y.r[8]))) ? parseInt(y.r[8]) : 1); }, 0);
+      if (dayQty > maxQty) { maxQty = dayQty; worstDate = d; worstRows = dayRows; }
+    });
+    if (maxQty > totalQty) {
+      conflicts.push({ item: itemName, library: libraryKey, totalQty: totalQty, bookedQty: maxQty, worstDate: worstDate, rows: worstRows });
+    }
+  });
+
+  // --- Missing calendar invites ---
+  var cal     = CalendarApp.getDefaultCalendar();
+  var missing = [];
+  var seen2   = {};
+  rows.forEach(function(r) {
+    var status = String(r[15]).trim();
+    if (status !== 'Confirmed' && status !== 'Lent Out' && status !== 'Added to existing request') return;
+    var email      = String(r[3]).trim();
+    var libraryKey = String(r[0]).trim();
+    var pickupDate = r[10] instanceof Date ? r[10] : new Date(r[10]);
+    var returnDate = r[12] instanceof Date ? r[12] : new Date(r[12]);
+    if (!email || isNaN(pickupDate.getTime()) || isNaN(returnDate.getTime())) return;
+    var key = email + '_' + libraryKey + '_' + Utilities.formatDate(pickupDate, tz, 'yyyy-MM-dd') + '_' + Utilities.formatDate(returnDate, tz, 'yyyy-MM-dd');
+    if (seen2[key]) return;
+    seen2[key] = true;
+    var firstName = String(r[2]).trim().split(' ')[0];
+    var lib = getLibrary(libraryKey);
+    var pDayStart = new Date(pickupDate); pDayStart.setHours(0,0,0,0);
+    var pDayEnd   = new Date(pickupDate); pDayEnd.setHours(23,59,59,999);
+    var rDayStart = new Date(returnDate); rDayStart.setHours(0,0,0,0);
+    var rDayEnd   = new Date(returnDate); rDayEnd.setHours(23,59,59,999);
+    var libNameClean = lib.name.replace(/'/g, '');
+    var pickupEvents = cal.getEvents(pDayStart, pDayEnd, { search: firstName + ' <> ' + libNameClean + ' Pickup' });
+    var returnEvents = cal.getEvents(rDayStart, rDayEnd, { search: firstName + ' <> ' + libNameClean + ' Return' });
+    if (!pickupEvents.length || !returnEvents.length) {
+      var issues = [];
+      if (!pickupEvents.length) issues.push('missing pickup invite (' + Utilities.formatDate(pickupDate, tz, 'MMM d') + ')');
+      if (!returnEvents.length) issues.push('missing return invite (' + Utilities.formatDate(returnDate, tz, 'MMM d') + ')');
+      missing.push(String(r[2]).trim() + ' <' + email + '> — ' + libraryKey + ' — ' + issues.join(', '));
+    }
+  });
+
+  // --- Overdue status updates ---
+  // A "Confirmed" reservation whose pickup date has passed, or a "Lent
+  // Out"/"Added to existing request" reservation whose return date has
+  // passed, without status ever having been updated. These rows don't
+  // match any bucket getAdminData() builds either (see Admin.gs's
+  // overduePickups addition), so this is the email-side half of closing
+  // that same gap — the two are meant to stay in sync.
+  var overduePickups = [], overdueReturns = [];
+  var seen3 = {};
+  rows.forEach(function(r) {
+    var status = String(r[15]).trim();
+    var email  = String(r[3]).trim();
+    var libraryKey = String(r[0]).trim();
+    if (!email || !libraryKey) return;
+    var name = String(r[2]).trim();
+    var itemName = String(r[7]).trim();
+
+    if (status === 'Confirmed' && r[10]) {
+      var pd = r[10] instanceof Date ? new Date(r[10]) : new Date(r[10]);
+      pd.setHours(0, 0, 0, 0);
+      if (pd < today) {
+        var pKey = 'p_' + email + '_' + libraryKey + '_' + Utilities.formatDate(pd, tz, 'yyyy-MM-dd');
+        if (!seen3[pKey]) {
+          seen3[pKey] = true;
+          var daysLate1 = Math.round((today - pd) / 86400000);
+          overduePickups.push(name + ' <' + email + '> — ' + libraryKey + ' — ' + itemName + ' — pickup was ' + Utilities.formatDate(pd, tz, 'MMM d') + ' (' + daysLate1 + ' day' + (daysLate1 !== 1 ? 's' : '') + ' ago), still "Confirmed"');
+        }
+      }
+    }
+
+    if ((status === 'Lent Out' || status === 'Added to existing request') && r[12]) {
+      var rd = r[12] instanceof Date ? new Date(r[12]) : new Date(r[12]);
+      rd.setHours(0, 0, 0, 0);
+      if (rd < today) {
+        var rKey = 'r_' + email + '_' + libraryKey + '_' + Utilities.formatDate(rd, tz, 'yyyy-MM-dd');
+        if (!seen3[rKey]) {
+          seen3[rKey] = true;
+          var daysLate2 = Math.round((today - rd) / 86400000);
+          overdueReturns.push(name + ' <' + email + '> — ' + libraryKey + ' — ' + itemName + ' — return was due ' + Utilities.formatDate(rd, tz, 'MMM d') + ' (' + daysLate2 + ' day' + (daysLate2 !== 1 ? 's' : '') + ' ago), still "' + status + '"');
+        }
+      }
+    }
+  });
+
+  // --- Send combined email ---
+  var me = Session.getEffectiveUser().getEmail();
+  if (!conflicts.length && !missing.length && !overduePickups.length && !overdueReturns.length) {
+    GmailApp.sendEmail(me, 'Lending Library: nightly audit — all clear',
+      'No double bookings, no missing calendar invites, no overdue status updates. Nothing to action.');
+    return;
+  }
+  var parts = [];
+  if (conflicts.length)      parts.push(conflicts.length + ' double-booking conflict(s)');
+  if (missing.length)        parts.push(missing.length + ' missing calendar invite(s)');
+  if (overduePickups.length) parts.push(overduePickups.length + ' overdue pickup(s)');
+  if (overdueReturns.length) parts.push(overdueReturns.length + ' overdue return(s)');
+  var body = '';
+  if (conflicts.length) {
+    body += '=== DOUBLE BOOKINGS ===\n\n';
+    conflicts.forEach(function(c) {
+      var worstFmt = c.worstDate ? Utilities.formatDate(c.worstDate, tz, 'MMM d') : '?';
+      body += c.item + ' [' + c.library + '] — ' + c.totalQty + ' available, ' + c.bookedQty + ' needed on ' + worstFmt + ':\n';
+      c.rows.forEach(function(x) {
+        var pd = Utilities.formatDate(x.r[10] instanceof Date ? x.r[10] : new Date(x.r[10]), tz, 'MMM d');
+        var rd = Utilities.formatDate(x.r[12] instanceof Date ? x.r[12] : new Date(x.r[12]), tz, 'MMM d');
+        body += '  • ' + x.r[2] + ' <' + x.r[3] + '> | ' + pd + ' – ' + rd + ' | ' + x.r[15] + ' | Row ' + x.rowNum + '\n';
+      });
+      body += '\n';
+    });
+  }
+  if (overduePickups.length || overdueReturns.length) {
+    if (body) body += '\n';
+    body += '=== OVERDUE STATUS UPDATES ===\n\n';
+    if (overduePickups.length) {
+      body += 'Pickup date passed, still "Confirmed" — mark Lent Out or follow up:\n';
+      body += overduePickups.join('\n') + '\n\n';
+    }
+    if (overdueReturns.length) {
+      body += 'Return date passed, still checked out — mark Returned or follow up:\n';
+      body += overdueReturns.join('\n') + '\n\n';
+    }
+  }
+  if (missing.length) {
+    if (body) body += '\n';
+    body += '=== MISSING CALENDAR INVITES ===\n\n';
+    body += missing.join('\n') + '\n\n';
+    body += 'The sendPendingInvites trigger retries every 5 min. If still missing after 10 min, run clearScriptProperties() then sendPendingInvites() manually.';
+  }
+  GmailApp.sendEmail(me, 'Lending Library: nightly audit — ' + parts.join(', '), body);
+  Logger.log(body);
+}
+
+function dailyScheduleEmail() {
+  var ss   = SpreadsheetApp.getActiveSpreadsheet();
+  var rows = ss.getSheetByName(RSVP_TAB).getDataRange().getValues().slice(1);
+  var tz   = Session.getScriptTimeZone();
+  var tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  var fmtDate = Utilities.formatDate(tomorrow, tz, 'EEEE, MMMM d');
+  function isTomorrow(d) {
+    var dt = d instanceof Date ? d : new Date(d); dt.setHours(0, 0, 0, 0);
+    return dt.getTime() === tomorrow.getTime();
+  }
+  function itemLine(r) {
+    var label = String(r[7]).trim();
+    var details = [String(r[6] || '').trim(), String(r[9] || '').trim()].filter(Boolean).join(', ');
+    if (details) label += ' (' + details + ')';
+    label += ' [' + String(r[0]).trim() + ']';
+    return label;
+  }
+  // Group rows by borrower (email + library + time), expanding qty into individual lines
+  function groupByBorrower(entries) {
+    var order = [], groups = {};
+    entries.forEach(function(e) {
+      var key = e.email + '|' + e.library + '|' + e.time;
+      if (!groups[key]) { order.push(key); groups[key] = { name: e.name, phone: e.phone, time: e.time, items: [] }; }
+      for (var i = 0; i < e.qty; i++) groups[key].items.push(e.line);
+    });
+    return order.map(function(k) { return groups[k]; });
+  }
+  var pickupRows = [], returnRows = [];
+  rows.forEach(function(r) {
+    var status = String(r[15]).trim();
+    var qty = parseInt(r[8]); if (isNaN(qty) || qty < 1) qty = 1;
+    if (isTomorrow(r[10]) && (status === 'Confirmed' || status === 'Added to existing request')) {
+      pickupRows.push({ name: String(r[2]).trim(), email: String(r[3]).trim(), phone: String(r[4]).trim(), time: String(r[11] || '').trim(), library: String(r[0]).trim(), line: itemLine(r), qty: qty });
+    }
+    if (isTomorrow(r[12]) && (status === 'Lent Out' || status === 'Added to existing request')) {
+      returnRows.push({ name: String(r[2]).trim(), email: String(r[3]).trim(), phone: String(r[4]).trim(), time: String(r[13] || '').trim(), library: String(r[0]).trim(), line: itemLine(r), qty: qty });
+    }
+  });
+  function timeToMins(t) {
+    var m = String(t || '').match(/^(\d+)\s*(am|pm)?\s*-\s*\d+\s*(am|pm)/i);
+    if (!m) return 9999;
+    var h = parseInt(m[1]), period = (m[2] || m[3]).toUpperCase();
+    if (period === 'PM' && h !== 12) h += 12;
+    if (period === 'AM' && h === 12) h = 0;
+    return h * 60;
+  }
+  var pickups = groupByBorrower(pickupRows).sort(function(a, b) { return timeToMins(a.time) - timeToMins(b.time); });
+  var returns = groupByBorrower(returnRows).sort(function(a, b) { return timeToMins(a.time) - timeToMins(b.time); });
+  var body = pickups.length || returns.length
+    ? 'Here\'s what\'s on for tomorrow (' + fmtDate + '):\n\n'
+    : 'Nothing scheduled for tomorrow (' + fmtDate + '). Enjoy the day off!\n';
+  if (pickups.length) {
+    body += 'PICKUPS — put these out:\n\n';
+    pickups.forEach(function(p) {
+      if (p.time) body += p.time + '\n';
+      body += p.name + ' · ' + p.phone + '\n';
+      p.items.forEach(function(line) { body += '  • ' + line + '\n'; });
+      body += '\n';
+    });
+  }
+  if (returns.length) {
+    body += 'RETURNS:\n\n';
+    returns.forEach(function(r) {
+      if (r.time) body += r.time + '\n';
+      body += r.name + ' · ' + r.phone + '\n';
+      r.items.forEach(function(line) { body += '  • ' + line + '\n'; });
+      body += '\n';
+    });
+  }
+  var parts = [];
+  if (pickups.length) parts.push(pickups.length + ' pickup' + (pickups.length > 1 ? 's' : ''));
+  if (returns.length) parts.push(returns.length + ' return' + (returns.length > 1 ? 's' : ''));
+  var subject = pickups.length || returns.length
+    ? 'Lending Library: tomorrow (' + fmtDate + ') — ' + parts.join(', ')
+    : 'Lending Library: tomorrow (' + fmtDate + ') — all clear';
+  GmailApp.sendEmail(Session.getEffectiveUser().getEmail(), subject, body);
+}
+
+function setupTriggers() {
+  ScriptApp.getProjectTriggers().forEach(function(t) { ScriptApp.deleteTrigger(t); });
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ScriptApp.newTrigger('onSheetEdit').forSpreadsheet(ss).onEdit().create();
+  ScriptApp.newTrigger('sendPendingReceipts').timeBased().everyMinutes(5).create();
+  ScriptApp.newTrigger('sendPendingInvites').timeBased().everyMinutes(5).create();
+  ScriptApp.newTrigger('nightlyAudit').timeBased().everyDays(1).atHour(8).create();
+  ScriptApp.newTrigger('dailyScheduleEmail').timeBased().everyDays(1).atHour(19).create();
+  ScriptApp.newTrigger('sendPickupReminders').timeBased().everyDays(1).atHour(8).create();
+  ScriptApp.newTrigger('sendPickupReminders').timeBased().everyDays(1).atHour(16).create(); // catch-all for reservations confirmed after the 8am run
+  ScriptApp.newTrigger('sendReturnReminders').timeBased().everyDays(1).atHour(8).create();
+  ScriptApp.newTrigger('sendReturnReminders').timeBased().everyDays(1).atHour(16).create(); // catch-all for items marked Lent Out after the 8am run
+  ScriptApp.newTrigger('setupTriggers').timeBased().everyDays(1).atHour(3).create();
+  Logger.log('Triggers installed.');
+}
+
+function initializeAll() {
+  getOrCreateReservationsSheet();
+  LIBRARIES.forEach(function(lib) { buildAvailabilityCalendar(lib.key); buildCurrentlyOut(lib.key); });
+  setupTriggers();
+  Logger.log('Done - unified library system initialized.');
+}
+
+function doGet(e) {
+  var action = e && e.parameter && e.parameter.action;
+
+  if (action === 'ping') {
+    return ContentService.createTextOutput(JSON.stringify({ ok: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // Pre-populate all library caches so the first real request is fast
+  if (action === 'warmup') {
+    try { LIBRARIES.forEach(function(lib) { getAvailabilityData(lib.key); }); getFAQData(); } catch(err) {}
+    return ContentService.createTextOutput(JSON.stringify({ ok: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (action === 'availability') {
+    var libKey = e.parameter.lib;
+    if (!libKey || !isKnownLibrary(libKey)) {
+      return ContentService.createTextOutput(JSON.stringify({ error: 'Invalid library key.' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    return ContentService.createTextOutput(JSON.stringify(getAvailabilityData(libKey)))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (action === 'faq') {
+    return ContentService.createTextOutput(JSON.stringify(getFAQData()))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // Legacy fallback: serve the HTML page directly from Apps Script
+  return HtmlService.createHtmlOutputFromFile('availability')
+    .setTitle('SF Lending Library')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+function doPost(e) {
+  try {
+    var body   = JSON.parse(e.postData.contents);
+    var action = body.action;
+    var result;
+    if (action === 'submitReservation') {
+      result = submitReservation(body);
+    } else if (action === 'sendContactMessage') {
+      result = sendContactMessage(body);
+    } else if (action === 'admin') {
+      result = getAdminData(body.passcode);
+    } else if (action === 'adminUpdateStatus') {
+      result = adminUpdateStatus(body);
+    } else if (action === 'adminBatchUpdateStatus') {
+      result = adminBatchUpdateStatus(body);
+    } else if (action === 'adminReviseReservation') {
+      result = adminReviseReservation(body);
+    } else {
+      result = { success: false, message: 'Unknown action.' };
+    }
+    return ContentService.createTextOutput(JSON.stringify(result))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ success: false, message: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function normalizeDriveUrl(url) {
+  if (!url) return '';
+  var s = String(url).trim();
+  if (s.indexOf('lh3.googleusercontent.com') !== -1) return s;
+  var fileId = null;
+  var dIdx = s.indexOf('/d/');
+  if (dIdx !== -1) {
+    fileId = s.substring(dIdx + 3).split('/')[0].split('?')[0];
+  }
+  if (!fileId) {
+    var idMatch = s.match(/[?&]id=([^&]+)/);
+    if (idMatch) fileId = idMatch[1];
+  }
+  if (fileId) return 'https://lh3.googleusercontent.com/d/' + fileId;
+  return s;
+}
+
+function clearAvailabilityCache(libraryKey) {
+  try {
+    var cache = CacheService.getScriptCache();
+    if (libraryKey) {
+      cache.remove('avail_v2_' + libraryKey);
+    } else {
+      LIBRARIES.forEach(function(lib) { cache.remove('avail_v2_' + lib.key); });
+    }
+  } catch(e) {}
+}
+
+function getAvailabilityData(libraryKey) {
+  var cacheKey = 'avail_v2_' + libraryKey;
+  var cache    = CacheService.getScriptCache();
+  var cached   = cache.get(cacheKey);
+  if (cached) { try { return JSON.parse(cached); } catch(e) {} }
+  var ss        = SpreadsheetApp.getActiveSpreadsheet();
+  var invSheet  = ss.getSheetByName(INV_TAB);
+  var rsvpSheet = ss.getSheetByName(RSVP_TAB);
+  var invData   = invSheet.getDataRange().getValues();
+  var rsvpData  = rsvpSheet.getDataRange().getValues();
+  var lib       = getLibrary(libraryKey);
+  var today     = new Date(); today.setHours(0, 0, 0, 0);
+  // Items relevant to this library (directly listed or cross-listed via a
+  // comma-separated Library cell), indexed by Item ID — the stable key —
+  // with a name-keyed fallback map alongside it for the rare legacy row
+  // that predates ID tracking. A reservation's stored Item ID doesn't
+  // change if the item is later renamed in inventory, so joining this way
+  // keeps a renamed item's existing reservations correctly counted against
+  // it instead of silently dropping out because the names no longer match.
+  var idToLibs = {}, nameToLibs = {};
+  for (var j0 = 1; j0 < invData.length; j0++) {
+    var iid0   = String(invData[j0][COL_ITEM_ID] || '').trim();
+    var iname0 = String(invData[j0][COL_ITEM]).trim();
+    if (!iname0) continue;
+    var libs0 = itemLibraries(invData[j0][COL_LIBRARY]);
+    if (libs0.indexOf(libraryKey) === -1) continue;
+    if (iid0) idToLibs[iid0] = libs0;
+    nameToLibs[iname0] = libs0;
+  }
+
+  var reservations = [], activeRsvps = {}, lentOut = {};
+  for (var i = 1; i < rsvpData.length; i++) {
+    var row        = rsvpData[i];
+    var rowItemId  = String(row[5] || '').trim(); // F: Item ID
+    var itemName   = String(row[7]).trim();       // H: Item Name
+    var pickupDate = row[10];                  // K: Pickup Date
+    var returnDate = row[12];                  // M: Return Date
+    var status     = String(row[15]).trim();   // P: Status
+    var rowLib     = String(row[0]).trim();    // A: Library
+    var qty        = (row[8] && !isNaN(parseInt(row[8]))) ? parseInt(row[8]) : 1;    // I: Qty
+    var itemLibs   = (rowItemId && idToLibs[rowItemId]) ? idToLibs[rowItemId] : nameToLibs[itemName];
+    if (!itemLibs || itemLibs.indexOf(rowLib) === -1) continue;
+    if (['Confirmed', 'Lent Out', 'Pending', 'Added to existing request'].indexOf(status) === -1) continue;
+    if (!itemName || !pickupDate || !returnDate) continue;
+    var pd = new Date(pickupDate); pd.setHours(0, 0, 0, 0);
+    var rd = new Date(returnDate); rd.setHours(0, 0, 0, 0);
+    var joinKey = rowItemId || itemName;
+    reservations.push({ item: itemName, pickup: pd.getTime(), ret: rd.getTime(), qty: qty });
+    if (!activeRsvps[joinKey]) activeRsvps[joinKey] = [];
+    activeRsvps[joinKey].push({ pickup: pd, ret: rd, qty: qty });
+    if ((status === 'Lent Out' || status === 'Added to existing request') && pd <= today && rd >= today) lentOut[joinKey] = true;
+  }
+  var items = [];
+  for (var j = 1; j < invData.length; j++) {
+    var irow    = invData[j];
+    if (itemLibraries(irow[COL_LIBRARY]).indexOf(libraryKey) === -1) continue;
+    var iid        = String(irow[COL_ITEM_ID] || '').trim();
+    var iname      = String(irow[COL_ITEM]).trim();
+    var availFlag  = String(irow[COL_CURRENTLY_HAVE]).trim().toUpperCase();
+    var category   = String(irow[COL_CATEGORY]).trim();
+    var brand      = String(irow[COL_BRAND]    || '').trim();
+    var size       = String(irow[COL_SIZE]     || '').trim();
+    if (!iname || availFlag !== 'Y') continue;
+    var imageUrl = normalizeDriveUrl(String(irow[COL_IMAGE_URL] || '').trim());
+    var link     = String(irow[COL_LINK] || '').trim();
+    var iqty     = (irow[COL_QTY] && !isNaN(parseInt(irow[COL_QTY]))) ? parseInt(irow[COL_QTY]) : 1;
+    var joinKey  = iid || iname;
+    var rsvps    = activeRsvps[joinKey] || [];
+    var bookedToday = rsvps.reduce(function(sum, b) {
+      return sum + (b.pickup <= today && b.ret >= today ? b.qty : 0);
+    }, 0);
+    var isAvailable = bookedToday < iqty;
+    var nextAvailStr = null;
+    if (!isAvailable) {
+      // Find earliest date when bookedQty drops below iqty
+      var futureDates = rsvps.map(function(b) { return b.ret; }).filter(function(d) { return d >= today; }).sort(function(a, b) { return a - b; });
+      if (futureDates.length) {
+        var nextDay = new Date(futureDates[0]); nextDay.setDate(nextDay.getDate() + 1);
+        nextAvailStr = nextDay.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      }
+    }
+    var itemObj = { name: iname, category: category || 'Other', available: isAvailable, currentlyOut: !!lentOut[joinKey], nextAvailable: nextAvailStr, imageUrl: imageUrl, link: link, qty: iqty };
+    if (brand) itemObj.brand = brand;
+    if (size)  itemObj.size  = size;
+    items.push(itemObj);
+  }
+  items.sort(function(a, b) { return a.available !== b.available ? (a.available ? -1 : 1) : a.name.localeCompare(b.name); });
+  var blackouts = [];
+  try {
+    blackouts = getBlackoutDates().map(function(b) { return { start: b.start.getTime(), end: b.end.getTime() }; });
+  } catch(e) { Logger.log('getBlackoutDates failed: ' + e); }
+  var result = { items: items, reservations: reservations, blackouts: blackouts, bookingWindowDays: BOOKING_WINDOW_DAYS, maxLoanDays: lib.maxLoanDays, library: { key: lib.key, name: lib.name, shortName: lib.shortName } };
+  try { cache.put(cacheKey, JSON.stringify(result), 900); } catch(e) {}
+  return result;
+}
+
+
+
+function sendContactMessage(formData) {
+  try {
+    var name    = String(formData.name    || '').trim();
+    var email   = String(formData.email   || '').trim();
+    var phone   = String(formData.phone   || '').trim();
+    var message = String(formData.message || '').trim();
+    if (!name || !email || !message) return { success: false, message: 'All fields are required.' };
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { success: false, message: 'A valid email address is required.' };
+    var owner   = Session.getEffectiveUser().getEmail();
+    var subject = 'Lending Library — message from ' + name;
+    var body    = 'Name: ' + name + '\nEmail: ' + email + (phone ? '\nPhone/WhatsApp: ' + phone : '') + '\n\nMessage:\n' + message;
+    GmailApp.sendEmail(owner, subject, body, { replyTo: email });
+    return { success: true };
+  } catch (err) {
+    return { success: false, message: 'Something went wrong: ' + err.message };
+  }
+}
+
+function getFAQData() {
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get('faq_data');
+  if (cached) { try { return JSON.parse(cached); } catch(e) {} }
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(FAQ_TAB);
+  if (!sheet) return [];
+  var rows  = sheet.getDataRange().getValues().slice(1);
+  var groups = [], groupMap = {};
+  rows.forEach(function(r) {
+    var group    = String(r[0] || '').trim();
+    var question = String(r[1] || '').trim();
+    var answer   = String(r[2] || '').trim();
+    var active   = String(r[3] || 'Y').trim().toUpperCase();
+    if (!question || !answer || active !== 'Y') return;
+    if (!groupMap[group]) {
+      var g = { name: group, items: [] };
+      groups.push(g);
+      groupMap[group] = g;
+    }
+    groupMap[group].items.push({ q: question, a: answer });
+  });
+  try { cache.put('faq_data', JSON.stringify(groups), 3600); } catch(e) {}
+  return groups;
+}
+
+
+function auditForDoubleBookings() {
+  var ss       = SpreadsheetApp.getActiveSpreadsheet();
+  var invRows  = ss.getSheetByName(INV_TAB).getDataRange().getValues();
+  var rows     = ss.getSheetByName(RSVP_TAB).getDataRange().getValues().slice(1);
+  var tz       = Session.getScriptTimeZone();
+  var ACTIVE   = ['Pending', 'Confirmed', 'Lent Out', 'Added to existing request'];
+  var active   = rows.map(function(r, i) { return { r: r, rowNum: i + 2 }; })
+                     .filter(function(x) { return ACTIVE.indexOf(String(x.r[15]).trim()) !== -1; });
+  var conflicts = [];
+  var seen      = {};
+  active.forEach(function(x) {
+    var itemId     = String(x.r[5] || '').trim();
+    var itemName   = String(x.r[7]).trim();
+    var libraryKey = String(x.r[0]).trim();
+    var totalQty   = getItemQty(itemId, itemName, libraryKey, invRows);
+    var np = x.r[10] instanceof Date ? x.r[10] : new Date(x.r[10]);
+    var nr = x.r[12] instanceof Date ? x.r[12] : new Date(x.r[12]);
+    np = new Date(np); np.setHours(0,0,0,0);
+    nr = new Date(nr); nr.setHours(0,0,0,0);
+    var overlapping = active.filter(function(y) {
+      var yId = String(y.r[5] || '').trim();
+      var sameItem = (itemId && yId) ? (yId === itemId) : (String(y.r[7]).trim() === itemName);
+      if (!sameItem || String(y.r[0]).trim() !== libraryKey) return false;
+      var ep = y.r[10] instanceof Date ? y.r[10] : new Date(y.r[10]);
+      var er = y.r[12] instanceof Date ? y.r[12] : new Date(y.r[12]);
+      ep = new Date(ep); ep.setHours(0,0,0,0);
+      er = new Date(er); er.setHours(0,0,0,0);
+      return np <= er && nr >= ep;
+    });
+    var bookedQty = overlapping.reduce(function(sum, y) {
+      return sum + ((y.r[8] && !isNaN(parseInt(y.r[8]))) ? parseInt(y.r[8]) : 1);
+    }, 0);
+    if (bookedQty > totalQty) {
+      var conflictKey = libraryKey + '|' + itemName + '|' + overlapping.map(function(y) { return y.rowNum; }).sort().join(',');
+      if (!seen[conflictKey]) {
+        seen[conflictKey] = true;
+        conflicts.push({ item: itemName, library: libraryKey, totalQty: totalQty, bookedQty: bookedQty, rows: overlapping });
+      }
+    }
+  });
+  if (!conflicts.length) {
+    Logger.log('No double-booking conflicts found — all reservations look clean.');
+    return;
+  }
+  var lines = [conflicts.length + ' double-booking conflict(s) found:\n'];
+  conflicts.forEach(function(c) {
+    lines.push(c.item + ' [' + c.library + '] — ' + c.totalQty + ' available, ' + c.bookedQty + ' booked:');
+    c.rows.forEach(function(x) {
+      var pd = Utilities.formatDate(x.r[10] instanceof Date ? x.r[10] : new Date(x.r[10]), tz, 'MMM d');
+      var rd = Utilities.formatDate(x.r[12] instanceof Date ? x.r[12] : new Date(x.r[12]), tz, 'MMM d');
+      lines.push('  • ' + x.r[2] + ' <' + x.r[3] + '> | ' + pd + ' – ' + rd + ' | ' + x.r[15] + ' | Row ' + x.rowNum);
+    });
+    lines.push('');
+  });
+  var report = lines.join('\n');
+  GmailApp.sendEmail(Session.getEffectiveUser().getEmail(), 'Lending Library: ' + conflicts.length + ' double-booking conflict(s)', report);
+  Logger.log(report);
+}
+
+function debugItem(itemId) {
+  var ss      = SpreadsheetApp.getActiveSpreadsheet();
+  var invRows = ss.getSheetByName(INV_TAB).getDataRange().getValues();
+  var rsvpRows = ss.getSheetByName(RSVP_TAB).getDataRange().getValues();
+  var tz = Session.getScriptTimeZone();
+
+  // Find the item in inventory by item ID
+  var invMatch = null;
+  for (var i = 1; i < invRows.length; i++) {
+    if (String(invRows[i][COL_ITEM_ID]).trim() === itemId) { invMatch = invRows[i]; break; }
+  }
+  if (!invMatch) { Logger.log('Item ID ' + itemId + ' not found in inventory.'); return; }
+  var invName = String(invMatch[COL_ITEM]).trim();
+  var invLib  = String(invMatch[COL_LIBRARY]).trim();
+  var invQty  = invMatch[COL_QTY];
+  Logger.log('=== INVENTORY ===');
+  Logger.log('ID: ' + itemId + ' | Name: [' + invName + '] | Library: [' + invLib + '] | Qty col raw: [' + invQty + '] | Qty parsed: ' + parseInt(invQty));
+
+  // Find all reservations rows that mention this item
+  var ACTIVE = ['Pending', 'Confirmed', 'Lent Out', 'Added to existing request'];
+  Logger.log('\n=== RESERVATIONS (active rows matching this item) ===');
+  var found = 0;
+  for (var j = 1; j < rsvpRows.length; j++) {
+    var r = rsvpRows[j];
+    var rName = String(r[7]).trim();
+    var rLib  = String(r[0]).trim();
+    var rStatus = String(r[15]).trim();
+    var rQty  = r[8];
+    var nameMatch = rName === invName;
+    var libMatch  = rLib  === invLib;
+    if (ACTIVE.indexOf(rStatus) !== -1 && (nameMatch || rName.toLowerCase().indexOf('lotus') !== -1)) {
+      var pu = r[10] instanceof Date ? Utilities.formatDate(r[10], tz, 'MMM d yyyy') : String(r[10]);
+      var ret = r[12] instanceof Date ? Utilities.formatDate(r[12], tz, 'MMM d yyyy') : String(r[12]);
+      Logger.log('Row ' + (j+1) + ': name=[' + rName + '] lib=[' + rLib + '] status=[' + rStatus + '] qty=[' + rQty + '] pickup=' + pu + ' return=' + ret);
+      Logger.log('  nameMatch=' + nameMatch + ' libMatch=' + libMatch);
+      found++;
+    }
+  }
+  if (!found) Logger.log('No active reservations found containing "lotus".');
+}
+
+function clearScriptProperties() {
+  PropertiesService.getScriptProperties().deleteAllProperties();
+  Logger.log('Script properties cleared.');
+}
+
+function resetSentKeysForEmail(email) {
+  var props = PropertiesService.getScriptProperties().getProperties();
+  var emailSlug = email.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+  var deleted = [];
+  Object.keys(props).forEach(function(key) {
+    if (key.indexOf('sent_') === 0 && key.toLowerCase().indexOf(emailSlug) !== -1) {
+      PropertiesService.getScriptProperties().deleteProperty(key);
+      deleted.push(key);
+    }
+  });
+  Logger.log(deleted.length ? 'Deleted sentKeys: ' + deleted.join(', ') : 'No sentKeys found for ' + email);
+}
+
+function countReservations() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
+  var rows  = sheet.getDataRange().getValues().slice(1);
+  var tz    = Session.getScriptTimeZone();
+  var seen  = {};
+  var byLibrary = {}, byStatus = {};
+  rows.forEach(function(r) {
+    var libraryKey = String(r[0]).trim();
+    var status     = String(r[15]).trim();
+    var email      = String(r[3]).trim();
+    var tsFmt      = r[1] instanceof Date ? Utilities.formatDate(r[1], tz, 'yyyy-MM-dd HH:mm:ss') : String(r[1]);
+    if (!email || !libraryKey || !tsFmt) return;
+    var key = libraryKey + '_' + email + '_' + tsFmt;
+    if (seen[key]) return;
+    seen[key] = true;
+    byLibrary[libraryKey] = (byLibrary[libraryKey] || 0) + 1;
+    byStatus[status]      = (byStatus[status]      || 0) + 1;
+  });
+  var total = Object.keys(seen).length;
+  var lines = ['Total unique reservations: ' + total, ''];
+  lines.push('By library:');
+  LIBRARIES.forEach(function(lib) { lines.push('  ' + lib.shortName + ': ' + (byLibrary[lib.key] || 0)); });
+  lines.push('');
+  lines.push('By status:');
+  Object.keys(byStatus).sort().forEach(function(s) { lines.push('  ' + s + ': ' + byStatus[s]); });
+  Logger.log(lines.join('\n'));
+}
+
+function findOldTitleInvites() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
+  var rows  = sheet.getDataRange().getValues().slice(1);
+  var cal   = CalendarApp.getDefaultCalendar();
+  var tz    = Session.getScriptTimeZone();
+  var seen  = {};
+  var found = [];
+  rows.forEach(function(r) {
+    var status = String(r[15]).trim();
+    if (status !== 'Confirmed' && status !== 'Lent Out' && status !== 'Added to existing request') return;
+    var email      = String(r[3]).trim();
+    var libraryKey = String(r[0]).trim();
+    var pickupDate = r[10] instanceof Date ? r[10] : new Date(r[10]);
+    var returnDate = r[12] instanceof Date ? r[12] : new Date(r[12]);
+    if (!email || isNaN(pickupDate.getTime()) || isNaN(returnDate.getTime())) return;
+    var key = email + '_' + libraryKey + '_' + Utilities.formatDate(pickupDate, tz, 'yyyy-MM-dd') + '_' + Utilities.formatDate(returnDate, tz, 'yyyy-MM-dd');
+    if (seen[key]) return;
+    seen[key] = true;
+    var name      = String(r[2]).trim();
+    var firstName = name.split(' ')[0];
+    var lib       = getLibrary(libraryKey);
+    var pStart = new Date(pickupDate); pStart.setHours(0,0,0,0);
+    var pEnd   = new Date(pickupDate); pEnd.setHours(23,59,59,999);
+    var rStart = new Date(returnDate); rStart.setHours(0,0,0,0);
+    var rEnd   = new Date(returnDate); rEnd.setHours(23,59,59,999);
+    var oldPickup = cal.getEvents(pStart, pEnd, { search: firstName + ' <> Lending Library Pickup' });
+    var oldReturn = cal.getEvents(rStart, rEnd, { search: firstName + ' <> Lending Library Return' });
+    oldPickup.forEach(function(ev) { found.push('RENAME: "' + ev.getTitle() + '" → "' + firstName + ' <> ' + lib.name + ' Pickup"  (' + Utilities.formatDate(pickupDate, tz, 'MMM d') + ')'); });
+    oldReturn.forEach(function(ev) { found.push('RENAME: "' + ev.getTitle() + '" → "' + firstName + ' <> ' + lib.name + ' Return"  (' + Utilities.formatDate(returnDate, tz, 'MMM d') + ')'); });
+  });
+  if (found.length) {
+    Logger.log(found.length + ' event(s) still need renaming:\n\n' + found.join('\n'));
+  } else {
+    Logger.log('All done — no events with old title format found.');
+  }
+}

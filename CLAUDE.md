@@ -115,6 +115,36 @@ boundary does.
 Same caveat as booking lead time: Admin's revise-reservation flow is not
 bound by this.
 
+## Item ID vs Item Name — matching reservations back to inventory
+
+Every reservation row stores an Item Name snapshot (column H) from the
+moment it was booked. Renaming an item in `inventory` later doesn't
+update that snapshot, so name-based matching between `reservations` and
+`inventory` quietly breaks for any reservation booked before the rename —
+not just cosmetic stuff like Care Tags, but the live availability
+calculation itself (`getAvailabilityData()`) and the conflict check that
+blocks double-booking (`checkAvailability()`), since both used to join
+purely on name.
+
+Fixed by matching on **Item ID** (column A/F, stable — never changes on a
+rename) wherever a reservation is being joined back to inventory, with a
+name-based fallback only for the rare row missing an ID. `findInventoryRow(itemId,
+itemName, libraryKey, invRows)` is the shared resolver — ID-first, name as
+fallback — used by `getItemQty/Brand/Size/CareTags/ImageUrl/Libraries()`,
+`checkAvailability()`, `getAvailabilityData()`, `nightlyAudit()`'s
+double-booking scan, and `auditForDoubleBookings()`. The one place a name
+lookup is unavoidable and intentional: `getItemId()`, resolving a fresh
+frontend submission's chosen name to its current inventory row — the
+frontend only ever knows items by name, so this is where an ID first gets
+attached to a reservation. Everything downstream of that point works from
+the ID.
+
+Not touched (name-based, informational only, don't gate booking):
+`buildAvailabilityCalendar()` (its Sheets formula still joins on
+Reservations!H vs the calendar tab's own name column) and `debugItem()`'s
+logging. `buildCurrentlyOut()` was never affected — it reads a
+reservation's own stored fields directly, no inventory join involved.
+
 ## Deployment
 
 - `assets/`, `layouts/`, `content/`, `data/`, `hugo.toml` → live site,

@@ -112,75 +112,70 @@ function libraryMatches(rawLibraryField, libraryKey) {
   return itemLibraries(rawLibraryField).indexOf(libraryKey) !== -1;
 }
 
+// Resolves one inventory row for an item. Prefers an exact Item ID match
+// (stable — untouched by later renames) when itemId is given; falls back
+// to matching by name when there's no ID to go on. The one place that
+// fallback is actually needed: translating a fresh submission from the
+// frontend, which only ever knows an item by its current name. Everywhere
+// else works from a reservation's already-stored Item ID, so a later
+// rename of the inventory row can't silently break the join.
+function findInventoryRow(itemId, itemName, libraryKey, invRows) {
+  if (itemId) {
+    for (var i = 1; i < invRows.length; i++) {
+      if (String(invRows[i][COL_ITEM_ID]).trim() === itemId) return invRows[i];
+    }
+  }
+  if (itemName) {
+    for (var j = 1; j < invRows.length; j++) {
+      if (String(invRows[j][COL_ITEM]).trim() === itemName && libraryMatches(invRows[j][COL_LIBRARY], libraryKey)) return invRows[j];
+    }
+  }
+  return null;
+}
+
 // Full set of library keys a given item is listed under (its cross-listing
-// group), looked up via any one of those keys. Falls back to just the
-// key passed in if the item isn't found.
-function getItemLibraries(itemName, libraryKey, invRows) {
-  for (var i = 1; i < invRows.length; i++) {
-    if (String(invRows[i][COL_ITEM]).trim() === itemName && libraryMatches(invRows[i][COL_LIBRARY], libraryKey)) {
-      return itemLibraries(invRows[i][COL_LIBRARY]);
-    }
-  }
-  return [libraryKey];
+// group). Falls back to just the key passed in if the item isn't found.
+function getItemLibraries(itemId, itemName, libraryKey, invRows) {
+  var row = findInventoryRow(itemId, itemName, libraryKey, invRows);
+  return row ? itemLibraries(row[COL_LIBRARY]) : [libraryKey];
 }
 
-function getItemQty(itemName, libraryKey, invRows) {
-  var rows = invRows || SpreadsheetApp.getActiveSpreadsheet().getSheetByName(INV_TAB).getDataRange().getValues();
-  for (var i = 1; i < rows.length; i++) {
-    if (String(rows[i][COL_ITEM]).trim() === itemName && libraryMatches(rows[i][COL_LIBRARY], libraryKey)) {
-      var q = parseInt(rows[i][COL_QTY]);
-      return isNaN(q) || q < 1 ? 1 : q;
-    }
-  }
-  return 1;
+function getItemQty(itemId, itemName, libraryKey, invRows) {
+  var row = findInventoryRow(itemId, itemName, libraryKey, invRows);
+  if (!row) return 1;
+  var q = parseInt(row[COL_QTY]);
+  return isNaN(q) || q < 1 ? 1 : q;
 }
 
+// The one lookup that's inherently name-based: resolving a fresh
+// submission's item name to its current inventory row so we have
+// something stable (the ID) to store on the new reservation going forward.
 function getItemId(itemName, libraryKey, invRows) {
-  for (var i = 1; i < invRows.length; i++) {
-    if (String(invRows[i][COL_ITEM]).trim() === itemName && libraryMatches(invRows[i][COL_LIBRARY], libraryKey)) {
-      return String(invRows[i][COL_ITEM_ID]).trim();
-    }
-  }
-  return '';
+  var row = findInventoryRow(null, itemName, libraryKey, invRows);
+  return row ? String(row[COL_ITEM_ID]).trim() : '';
 }
 
-function getItemBrand(itemName, libraryKey, invRows) {
-  for (var i = 1; i < invRows.length; i++) {
-    if (String(invRows[i][COL_ITEM]).trim() === itemName && libraryMatches(invRows[i][COL_LIBRARY], libraryKey)) {
-      return String(invRows[i][COL_BRAND] || '').trim();
-    }
-  }
-  return '';
+function getItemBrand(itemId, itemName, libraryKey, invRows) {
+  var row = findInventoryRow(itemId, itemName, libraryKey, invRows);
+  return row ? String(row[COL_BRAND] || '').trim() : '';
 }
 
-function getItemSize(itemName, libraryKey, invRows) {
-  for (var i = 1; i < invRows.length; i++) {
-    if (String(invRows[i][COL_ITEM]).trim() === itemName && libraryMatches(invRows[i][COL_LIBRARY], libraryKey)) {
-      return String(invRows[i][COL_SIZE] || '').trim();
-    }
-  }
-  return '';
+function getItemSize(itemId, itemName, libraryKey, invRows) {
+  var row = findInventoryRow(itemId, itemName, libraryKey, invRows);
+  return row ? String(row[COL_SIZE] || '').trim() : '';
 }
 
 // Comma-separated tags from the inventory sheet's Care Tags column (e.g.
 // "food, parts"), split into a clean array. See CARE_GUIDELINES for the
 // recognized tags and what each renders as on the return reminder.
-function getItemCareTags(itemName, libraryKey, invRows) {
-  for (var i = 1; i < invRows.length; i++) {
-    if (String(invRows[i][COL_ITEM]).trim() === itemName && libraryMatches(invRows[i][COL_LIBRARY], libraryKey)) {
-      return String(invRows[i][COL_CARE_TAGS] || '').split(',').map(function(t) { return t.trim(); }).filter(Boolean);
-    }
-  }
-  return [];
+function getItemCareTags(itemId, itemName, libraryKey, invRows) {
+  var row = findInventoryRow(itemId, itemName, libraryKey, invRows);
+  return row ? String(row[COL_CARE_TAGS] || '').split(',').map(function(t) { return t.trim(); }).filter(Boolean) : [];
 }
 
-function getItemImageUrl(itemName, libraryKey, invRows) {
-  for (var i = 1; i < invRows.length; i++) {
-    if (String(invRows[i][COL_ITEM]).trim() === itemName && libraryMatches(invRows[i][COL_LIBRARY], libraryKey)) {
-      return normalizeDriveUrl(String(invRows[i][COL_IMAGE_URL] || '').trim());
-    }
-  }
-  return '';
+function getItemImageUrl(itemId, itemName, libraryKey, invRows) {
+  var row = findInventoryRow(itemId, itemName, libraryKey, invRows);
+  return row ? normalizeDriveUrl(String(row[COL_IMAGE_URL] || '').trim()) : '';
 }
 
 function submitReservation(formData) {
@@ -224,11 +219,14 @@ function submitReservation(formData) {
       var itemName     = typeof item === 'object' ? String(item.name) : String(item);
       var requestedQty = (typeof item === 'object' && item.qty) ? parseInt(item.qty) : 1;
       if (isNaN(requestedQty) || requestedQty < 1) requestedQty = 1;
-      var availStatus  = checkAvailability(itemName, pickupDate, returnDate, requestedQty, libraryKey, invRows, rsvpRows);
-      if (availStatus === '✗ Unavailable') { unavailable.push(itemName); return; }
+      // Resolve the item's stable ID once, by name — the only point in the
+      // whole flow where that's necessary — then use the ID for everything
+      // else, including matching this request against existing reservations.
       var itemId       = getItemId(itemName, libraryKey, invRows);
-      var brand        = getItemBrand(itemName, libraryKey, invRows);
-      var size         = getItemSize(itemName, libraryKey, invRows);
+      var availStatus  = checkAvailability(itemId, itemName, pickupDate, returnDate, requestedQty, libraryKey, invRows, rsvpRows);
+      if (availStatus === '✗ Unavailable') { unavailable.push(itemName); return; }
+      var brand        = getItemBrand(itemId, itemName, libraryKey, invRows);
+      var size         = getItemSize(itemId, itemName, libraryKey, invRows);
       newRows.push([libraryKey, timestamp, name, email, phone, itemId, brand, itemName, requestedQty, size, pickupDate, pickupTime, returnDate, returnTime, availStatus, 'Pending', '']);
     });
     if (unavailable.length) return { success: false, message: 'The following item(s) are not available for your selected dates: ' + unavailable.join(', ') + '. Please choose different dates or remove these items from your cart.' };
@@ -349,10 +347,10 @@ function maxLoanCutoff(pickupDate, maxLoanDays, blackoutDates) {
   return cutoff;
 }
 
-function checkAvailability(item, newPickup, newReturn, requestedQty, libraryKey, invRows, rsvpRows) {
+function checkAvailability(itemId, itemName, newPickup, newReturn, requestedQty, libraryKey, invRows, rsvpRows) {
   requestedQty = parseInt(requestedQty) || 1;
-  var totalQty = getItemQty(item, libraryKey, invRows);
-  var itemLibs = getItemLibraries(item, libraryKey, invRows);
+  var totalQty = getItemQty(itemId, itemName, libraryKey, invRows);
+  var itemLibs = getItemLibraries(itemId, itemName, libraryKey, invRows);
   var rows = rsvpRows || SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB).getDataRange().getValues().slice(1);
   var np  = new Date(newPickup); np.setHours(0, 0, 0, 0);
   var nr  = new Date(newReturn); nr.setHours(0, 0, 0, 0);
@@ -360,10 +358,16 @@ function checkAvailability(item, newPickup, newReturn, requestedQty, libraryKey,
   var overlapping = [];
   var hasTight = false;
   rows.forEach(function(r) {
-    var rowItem    = String(r[7]).trim();
-    var rowLibrary = String(r[0]).trim();
-    var status     = String(r[15]).trim();
-    if (rowItem !== item || itemLibs.indexOf(rowLibrary) === -1 || status === 'Cancelled' || status === 'Returned' || status === 'Lost or Damaged') return;
+    var rowItemId   = String(r[5] || '').trim();
+    var rowItemName = String(r[7]).trim();
+    var rowLibrary  = String(r[0]).trim();
+    var status      = String(r[15]).trim();
+    // Prefer matching by Item ID (stable across a rename); only fall back
+    // to matching by name when either side is missing an ID, so a renamed
+    // item's existing reservations still count against the new request
+    // instead of silently falling out of the overlap check.
+    var matches = (itemId && rowItemId) ? (rowItemId === itemId) : (rowItemName === itemName);
+    if (!matches || itemLibs.indexOf(rowLibrary) === -1 || status === 'Cancelled' || status === 'Returned' || status === 'Lost or Damaged') return;
     var ep  = new Date(r[10]);  ep.setHours(0, 0, 0, 0);
     var er  = new Date(r[12]); er.setHours(0, 0, 0, 0);
     var qty = (r[8] && !isNaN(parseInt(r[8]))) ? parseInt(r[8]) : 1;
@@ -747,7 +751,8 @@ function sendReturnReminders() {
     }
     groups[key].items.push(itemLabel(r));
     var itemName = String(r[7]).trim();
-    var tags = getItemCareTags(itemName, libraryKey, invRows);
+    var itemId = String(r[5] || '').trim();
+    var tags = getItemCareTags(itemId, itemName, libraryKey, invRows);
     if (tags.length) {
       if (groups[key].careItemOrder.indexOf(itemName) === -1) groups[key].careItemOrder.push(itemName);
       if (!groups[key].careTagsByItem[itemName]) groups[key].careTagsByItem[itemName] = [];
@@ -803,7 +808,7 @@ function testReturnReminderEmail() {
   var invRows = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(INV_TAB).getDataRange().getValues();
   var careItemOrder = [], careTagsByItem = {};
   itemNames.forEach(function(name) {
-    var tags = getItemCareTags(name, libraryKey, invRows);
+    var tags = getItemCareTags('', name, libraryKey, invRows);
     if (!tags.length) return;
     if (careItemOrder.indexOf(name) === -1) careItemOrder.push(name);
     careTagsByItem[name] = tags;
@@ -1107,15 +1112,17 @@ function nightlyAudit() {
   var conflicts = [];
   var seenItems = {};
   active.forEach(function(x) {
+    var itemId     = String(x.r[5] || '').trim();
     var itemName   = String(x.r[7]).trim();
     var libraryKey = String(x.r[0]).trim();
-    var itemKey    = libraryKey + '|' + itemName;
+    var itemKey    = libraryKey + '|' + (itemId || itemName);
     if (seenItems[itemKey]) return;
     seenItems[itemKey] = true;
-    var totalQty = getItemQty(itemName, libraryKey, invRows);
+    var totalQty = getItemQty(itemId, itemName, libraryKey, invRows);
     var itemRows = active.filter(function(y) {
-      return String(y.r[7]).trim() === itemName && String(y.r[0]).trim() === libraryKey;
-    });
+      var yId = String(y.r[5] || '').trim();
+      return (itemId && yId) ? (yId === itemId) : (String(y.r[7]).trim() === itemName);
+    }).filter(function(y) { return String(y.r[0]).trim() === libraryKey; });
     // Collect all boundary dates and check concurrent demand at each
     var dates = [];
     itemRows.forEach(function(y) {
@@ -1413,41 +1420,51 @@ function getAvailabilityData(libraryKey) {
   var rsvpData  = rsvpSheet.getDataRange().getValues();
   var lib       = getLibrary(libraryKey);
   var today     = new Date(); today.setHours(0, 0, 0, 0);
-  // Item names relevant to this library (directly listed or cross-listed
-  // via a comma-separated Library cell), mapped to their full library set
-  // so a booking made through any of those libraries pools correctly.
-  var itemLibMap = {};
+  // Items relevant to this library (directly listed or cross-listed via a
+  // comma-separated Library cell), indexed by Item ID — the stable key —
+  // with a name-keyed fallback map alongside it for the rare legacy row
+  // that predates ID tracking. A reservation's stored Item ID doesn't
+  // change if the item is later renamed in inventory, so joining this way
+  // keeps a renamed item's existing reservations correctly counted against
+  // it instead of silently dropping out because the names no longer match.
+  var idToLibs = {}, nameToLibs = {};
   for (var j0 = 1; j0 < invData.length; j0++) {
+    var iid0   = String(invData[j0][COL_ITEM_ID] || '').trim();
     var iname0 = String(invData[j0][COL_ITEM]).trim();
     if (!iname0) continue;
     var libs0 = itemLibraries(invData[j0][COL_LIBRARY]);
-    if (libs0.indexOf(libraryKey) !== -1) itemLibMap[iname0] = libs0;
+    if (libs0.indexOf(libraryKey) === -1) continue;
+    if (iid0) idToLibs[iid0] = libs0;
+    nameToLibs[iname0] = libs0;
   }
 
   var reservations = [], activeRsvps = {}, lentOut = {};
   for (var i = 1; i < rsvpData.length; i++) {
     var row        = rsvpData[i];
-    var itemName   = String(row[7]).trim();   // H: Item Name
+    var rowItemId  = String(row[5] || '').trim(); // F: Item ID
+    var itemName   = String(row[7]).trim();       // H: Item Name
     var pickupDate = row[10];                  // K: Pickup Date
     var returnDate = row[12];                  // M: Return Date
     var status     = String(row[15]).trim();   // P: Status
     var rowLib     = String(row[0]).trim();    // A: Library
     var qty        = (row[8] && !isNaN(parseInt(row[8]))) ? parseInt(row[8]) : 1;    // I: Qty
-    var itemLibs   = itemLibMap[itemName];
+    var itemLibs   = (rowItemId && idToLibs[rowItemId]) ? idToLibs[rowItemId] : nameToLibs[itemName];
     if (!itemLibs || itemLibs.indexOf(rowLib) === -1) continue;
     if (['Confirmed', 'Lent Out', 'Pending', 'Added to existing request'].indexOf(status) === -1) continue;
     if (!itemName || !pickupDate || !returnDate) continue;
     var pd = new Date(pickupDate); pd.setHours(0, 0, 0, 0);
     var rd = new Date(returnDate); rd.setHours(0, 0, 0, 0);
+    var joinKey = rowItemId || itemName;
     reservations.push({ item: itemName, pickup: pd.getTime(), ret: rd.getTime(), qty: qty });
-    if (!activeRsvps[itemName]) activeRsvps[itemName] = [];
-    activeRsvps[itemName].push({ pickup: pd, ret: rd, qty: qty });
-    if ((status === 'Lent Out' || status === 'Added to existing request') && pd <= today && rd >= today) lentOut[itemName] = true;
+    if (!activeRsvps[joinKey]) activeRsvps[joinKey] = [];
+    activeRsvps[joinKey].push({ pickup: pd, ret: rd, qty: qty });
+    if ((status === 'Lent Out' || status === 'Added to existing request') && pd <= today && rd >= today) lentOut[joinKey] = true;
   }
   var items = [];
   for (var j = 1; j < invData.length; j++) {
     var irow    = invData[j];
     if (itemLibraries(irow[COL_LIBRARY]).indexOf(libraryKey) === -1) continue;
+    var iid        = String(irow[COL_ITEM_ID] || '').trim();
     var iname      = String(irow[COL_ITEM]).trim();
     var availFlag  = String(irow[COL_CURRENTLY_HAVE]).trim().toUpperCase();
     var category   = String(irow[COL_CATEGORY]).trim();
@@ -1457,7 +1474,8 @@ function getAvailabilityData(libraryKey) {
     var imageUrl = normalizeDriveUrl(String(irow[COL_IMAGE_URL] || '').trim());
     var link     = String(irow[COL_LINK] || '').trim();
     var iqty     = (irow[COL_QTY] && !isNaN(parseInt(irow[COL_QTY]))) ? parseInt(irow[COL_QTY]) : 1;
-    var rsvps    = activeRsvps[iname] || [];
+    var joinKey  = iid || iname;
+    var rsvps    = activeRsvps[joinKey] || [];
     var bookedToday = rsvps.reduce(function(sum, b) {
       return sum + (b.pickup <= today && b.ret >= today ? b.qty : 0);
     }, 0);
@@ -1471,7 +1489,7 @@ function getAvailabilityData(libraryKey) {
         nextAvailStr = nextDay.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       }
     }
-    var itemObj = { name: iname, category: category || 'Other', available: isAvailable, currentlyOut: !!lentOut[iname], nextAvailable: nextAvailStr, imageUrl: imageUrl, link: link, qty: iqty };
+    var itemObj = { name: iname, category: category || 'Other', available: isAvailable, currentlyOut: !!lentOut[joinKey], nextAvailable: nextAvailStr, imageUrl: imageUrl, link: link, qty: iqty };
     if (brand) itemObj.brand = brand;
     if (size)  itemObj.size  = size;
     items.push(itemObj);
@@ -1544,15 +1562,18 @@ function auditForDoubleBookings() {
   var conflicts = [];
   var seen      = {};
   active.forEach(function(x) {
+    var itemId     = String(x.r[5] || '').trim();
     var itemName   = String(x.r[7]).trim();
     var libraryKey = String(x.r[0]).trim();
-    var totalQty   = getItemQty(itemName, libraryKey, invRows);
+    var totalQty   = getItemQty(itemId, itemName, libraryKey, invRows);
     var np = x.r[10] instanceof Date ? x.r[10] : new Date(x.r[10]);
     var nr = x.r[12] instanceof Date ? x.r[12] : new Date(x.r[12]);
     np = new Date(np); np.setHours(0,0,0,0);
     nr = new Date(nr); nr.setHours(0,0,0,0);
     var overlapping = active.filter(function(y) {
-      if (String(y.r[7]).trim() !== itemName || String(y.r[0]).trim() !== libraryKey) return false;
+      var yId = String(y.r[5] || '').trim();
+      var sameItem = (itemId && yId) ? (yId === itemId) : (String(y.r[7]).trim() === itemName);
+      if (!sameItem || String(y.r[0]).trim() !== libraryKey) return false;
       var ep = y.r[10] instanceof Date ? y.r[10] : new Date(y.r[10]);
       var er = y.r[12] instanceof Date ? y.r[12] : new Date(y.r[12]);
       ep = new Date(ep); ep.setHours(0,0,0,0);

@@ -152,20 +152,41 @@ reservation's own stored fields directly, no inventory join involved.
 - `CODE_GS_RESTORE.md` / `ADMIN_GS_RESTORE.md` → **not** deployed by
   anything; they only take effect once manually pasted into Apps Script
   (see above).
-- Repo history note: two commits on `main` (Aug 8, "Add files via
-  upload") once replaced `README.md` and added a stray `Code.gs` from an
-  unrelated project ("Muddy", a household checklist app) — almost
-  certainly an accidental wrong-repo upload. They were reverted
+
+## Session hygiene — this environment is shared across Lauren's projects
+
+Lauren's Claude Code environment isn't dedicated to this repo — the same
+environment has hosted work on at least three unrelated projects: this
+lending library, "Friends of Parque Niños Unidos" (a park-cleanup
+volunteer site, repo `queenbirdie/parque-ninos-park`, live at
+friendsofsfparks.org), and "Muddy" (a household door-checklist app, also
+built inside `parque-ninos-park`'s environment). This has caused two
+distinct kinds of confusion worth watching for:
+
+- **Wrong-repo sessions.** A session titled around lending-library work
+  (e.g. "SF lending library inventory update") can still have
+  `parque-ninos-park` as its actual source repo — the title doesn't
+  guarantee the repo. If a session's work seems to have vanished or never
+  merged, check what repo it actually attached to before assuming the
+  work is lost; it may just be sitting in the wrong place (or, per the
+  case below, never pushed at all).
+- **Cross-project file bleed.** Two commits on `main` (Aug 8, "Add files
+  via upload") once replaced `README.md` and added a stray `Code.gs` from
+  Muddy — almost certainly an accidental wrong-repo upload. Reverted
   (`5e6cbd4`). If root-level files ever look unrelated to this project
   again, check `git log` before assuming they're intentional.
-- Session hygiene: on 2026-08-25, two Claude Code sessions were pushing
-  to this repo around the same time — one adding borrow-window limits,
-  another independently generalizing `careGuidelinesByItem()`'s Yoto
-  dedupe. Both landed fine (different functions, no line conflicts), but
-  `main` had moved between fetch and merge, turning an expected
-  fast-forward into a real merge. `CODE_GS_RESTORE.md` is one large file
-  most backend changes touch, so a same-region collision is easy to
-  imagine next time. Prefer one active session on this repo at a time;
-  if you can't be sure of that, `git fetch origin main` immediately
-  before merging rather than assuming `main` hasn't moved since you last
-  checked.
+
+Within this repo specifically: on 2026-08-25, two Claude Code sessions
+were pushing to `main` around the same time — one adding borrow-window
+limits, another independently generalizing `careGuidelinesByItem()`'s
+Yoto dedupe. Both landed fine (different functions, no line conflicts),
+but `main` had moved between fetch and merge, turning an expected
+fast-forward into a real merge. `CODE_GS_RESTORE.md` is one large file
+most backend changes touch, so a same-region collision is easy to imagine
+next time.
+
+**Takeaway for any future session:** confirm you're actually rooted in
+`queenbirdie/sf-lending-library` before starting work, prefer one active
+session on this repo at a time, and `git fetch origin main` immediately
+before merging rather than assuming `main` hasn't moved since you last
+checked.

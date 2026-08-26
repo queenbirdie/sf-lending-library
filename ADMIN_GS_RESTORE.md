@@ -69,7 +69,7 @@ function getAdminData(passcode) {
     return dt.getTime() === ref.getTime();
   }
 
-  var pending = [], tomorrowPickups = [], tomorrowReturns = [], todayReturns = [], overdue = [], upcoming = [], checkedOut = [], pastReservations = [];
+  var pending = [], tomorrowPickups = [], tomorrowReturns = [], todayReturns = [], overdue = [], overduePickups = [], upcoming = [], checkedOut = [], pastReservations = [];
   var PAST_STATUSES = ['Returned', 'Cancelled', 'Lost or Damaged'];
   var ARCHIVE_TAB = 'reservations archive';
 
@@ -83,6 +83,7 @@ function getAdminData(passcode) {
       var rowNum = i + 1;
       var status = String(r[15]).trim();
       if (PAST_STATUSES.indexOf(status) === -1) continue;
+      var itemIdP = String(r[5] || '').trim();
       out.push({
         row: rowNum,
         status: status,
@@ -97,7 +98,7 @@ function getAdminData(passcode) {
         size: String(r[9] || '').trim(),
         qty: (r[8] && !isNaN(parseInt(r[8]))) ? parseInt(r[8]) : 1,
         availabilityStatus: String(r[14] || '').trim(),
-        imageUrl: getItemImageUrl(String(r[7]).trim(), String(r[0]).trim(), invRows),
+        imageUrl: getItemImageUrl(itemIdP, String(r[7]).trim(), String(r[0]).trim(), invRows),
         pickupDate: fmt(r[10]), pickupDateISO: fmtISO(r[10]), pickupTime: String(r[11] || '').trim(),
         returnDate: fmt(r[12]), returnDateISO: fmtISO(r[12]), returnTime: String(r[13] || '').trim()
       });
@@ -109,6 +110,7 @@ function getAdminData(passcode) {
     var r = rows[i];
     var rowNum = i + 1;
     var status = String(r[15]).trim();
+    var itemId = String(r[5] || '').trim();
     var entry = {
       row: rowNum,
       status: status,
@@ -123,7 +125,7 @@ function getAdminData(passcode) {
       size: String(r[9] || '').trim(),
       qty: (r[8] && !isNaN(parseInt(r[8]))) ? parseInt(r[8]) : 1,
       availabilityStatus: String(r[14] || '').trim(),
-      imageUrl: getItemImageUrl(String(r[7]).trim(), String(r[0]).trim(), invRows),
+      imageUrl: getItemImageUrl(itemId, String(r[7]).trim(), String(r[0]).trim(), invRows),
       pickupDate: fmt(r[10]), pickupDateISO: fmtISO(r[10]), pickupTime: String(r[11] || '').trim(),
       returnDate: fmt(r[12]), returnDateISO: fmtISO(r[12]), returnTime: String(r[13] || '').trim()
     };
@@ -160,11 +162,24 @@ function getAdminData(passcode) {
         var eUpcoming = {};
         for (var k3 in entry) eUpcoming[k3] = entry[k3];
         upcoming.push(eUpcoming);
+      } else {
+        // Pickup date has passed but status was never flipped to "Lent
+        // Out" — without this bucket these rows match none of the
+        // sections above (not pending, not upcoming, not checked-out/
+        // overdue since those only look at Lent Out, not past) and are
+        // silently invisible on the dashboard. Mirrors nightlyAudit()'s
+        // overduePickups check in Code.js — the two are meant to stay in
+        // sync.
+        var eOverduePickup = {};
+        for (var k4 in entry) eOverduePickup[k4] = entry[k4];
+        eOverduePickup.daysLate = Math.round((today - pd) / 86400000);
+        overduePickups.push(eOverduePickup);
       }
     }
   }
 
   upcoming.sort(function(a, b) { return new Date(a.pickupDateISO) - new Date(b.pickupDateISO); });
+  overduePickups.sort(function(a, b) { return new Date(a.pickupDateISO) - new Date(b.pickupDateISO); });
   checkedOut.sort(function(a, b) { return new Date(a.returnDateISO) - new Date(b.returnDateISO); });
   pastReservations = pastReservations.concat(collectPastFromSheet(ARCHIVE_TAB));
   pastReservations.sort(function(a, b) { return b.sortKey - a.sortKey; });
@@ -179,12 +194,13 @@ function getAdminData(passcode) {
   var conflicts = [], seenItems = {};
   active.forEach(function(x) {
     var itemName = String(x.r[7]).trim();
+    var xItemId = String(x.r[5] || '').trim();
     var rowLibraryKey = String(x.r[0]).trim();
-    var itemLibs = getItemLibraries(itemName, rowLibraryKey, invRows);
+    var itemLibs = getItemLibraries(xItemId, itemName, rowLibraryKey, invRows);
     var itemKey = itemLibs.slice().sort().join(',') + '|' + itemName;
     if (seenItems[itemKey]) return;
     seenItems[itemKey] = true;
-    var totalQty = getItemQty(itemName, rowLibraryKey, invRows);
+    var totalQty = getItemQty(xItemId, itemName, rowLibraryKey, invRows);
     var itemRows = active.filter(function(y) {
       return String(y.r[7]).trim() === itemName && itemLibs.indexOf(String(y.r[0]).trim()) !== -1;
     });
@@ -217,7 +233,7 @@ function getAdminData(passcode) {
 
   return {
     pending: pending, tomorrowPickups: tomorrowPickups, tomorrowReturns: tomorrowReturns, todayReturns: todayReturns,
-    overdue: overdue, upcoming: upcoming, checkedOut: checkedOut, conflicts: conflicts, pastReservations: pastReservations
+    overdue: overdue, overduePickups: overduePickups, upcoming: upcoming, checkedOut: checkedOut, conflicts: conflicts, pastReservations: pastReservations
   };
 }
 
@@ -271,6 +287,7 @@ function adminReviseReservation(formData) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
   var data = sheet.getRange(row, 1, 1, 19).getValues()[0];
   var libraryKey = String(data[0]).trim();
+  var itemId = String(data[5] || '').trim();
   var itemName = String(data[7]).trim();
   var status = String(data[15]).trim();
   var oldPickupDate = data[10];
@@ -297,7 +314,7 @@ function adminReviseReservation(formData) {
     if (i + 2 === row) continue;
     otherRows.push(allRsvpRows[i]);
   }
-  var availStatus = checkAvailability(itemName, newPickupDate, newReturnDate, newQty, libraryKey, invRows, otherRows);
+  var availStatus = checkAvailability(itemId, itemName, newPickupDate, newReturnDate, newQty, libraryKey, invRows, otherRows);
   if (availStatus === '✗ Unavailable') {
     return { success: false, message: 'Not enough availability for the new dates/quantity.' };
   }

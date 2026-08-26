@@ -1104,6 +1104,7 @@ function nightlyAudit() {
   var invRows = ss.getSheetByName(INV_TAB).getDataRange().getValues();
   var rows    = ss.getSheetByName(RSVP_TAB).getDataRange().getValues().slice(1);
   var tz      = Session.getScriptTimeZone();
+  var today   = new Date(); today.setHours(0, 0, 0, 0);
 
   // --- Double bookings ---
   var ACTIVE  = ['Pending', 'Confirmed', 'Lent Out', 'Added to existing request'];
@@ -1179,16 +1180,62 @@ function nightlyAudit() {
     }
   });
 
+  // --- Overdue status updates ---
+  // A "Confirmed" reservation whose pickup date has passed, or a "Lent
+  // Out"/"Added to existing request" reservation whose return date has
+  // passed, without status ever having been updated. These rows don't
+  // match any bucket getAdminData() builds either (see Admin.gs's
+  // overduePickups addition), so this is the email-side half of closing
+  // that same gap — the two are meant to stay in sync.
+  var overduePickups = [], overdueReturns = [];
+  var seen3 = {};
+  rows.forEach(function(r) {
+    var status = String(r[15]).trim();
+    var email  = String(r[3]).trim();
+    var libraryKey = String(r[0]).trim();
+    if (!email || !libraryKey) return;
+    var name = String(r[2]).trim();
+    var itemName = String(r[7]).trim();
+
+    if (status === 'Confirmed' && r[10]) {
+      var pd = r[10] instanceof Date ? new Date(r[10]) : new Date(r[10]);
+      pd.setHours(0, 0, 0, 0);
+      if (pd < today) {
+        var pKey = 'p_' + email + '_' + libraryKey + '_' + Utilities.formatDate(pd, tz, 'yyyy-MM-dd');
+        if (!seen3[pKey]) {
+          seen3[pKey] = true;
+          var daysLate1 = Math.round((today - pd) / 86400000);
+          overduePickups.push(name + ' <' + email + '> — ' + libraryKey + ' — ' + itemName + ' — pickup was ' + Utilities.formatDate(pd, tz, 'MMM d') + ' (' + daysLate1 + ' day' + (daysLate1 !== 1 ? 's' : '') + ' ago), still "Confirmed"');
+        }
+      }
+    }
+
+    if ((status === 'Lent Out' || status === 'Added to existing request') && r[12]) {
+      var rd = r[12] instanceof Date ? new Date(r[12]) : new Date(r[12]);
+      rd.setHours(0, 0, 0, 0);
+      if (rd < today) {
+        var rKey = 'r_' + email + '_' + libraryKey + '_' + Utilities.formatDate(rd, tz, 'yyyy-MM-dd');
+        if (!seen3[rKey]) {
+          seen3[rKey] = true;
+          var daysLate2 = Math.round((today - rd) / 86400000);
+          overdueReturns.push(name + ' <' + email + '> — ' + libraryKey + ' — ' + itemName + ' — return was due ' + Utilities.formatDate(rd, tz, 'MMM d') + ' (' + daysLate2 + ' day' + (daysLate2 !== 1 ? 's' : '') + ' ago), still "' + status + '"');
+        }
+      }
+    }
+  });
+
   // --- Send combined email ---
   var me = Session.getEffectiveUser().getEmail();
-  if (!conflicts.length && !missing.length) {
+  if (!conflicts.length && !missing.length && !overduePickups.length && !overdueReturns.length) {
     GmailApp.sendEmail(me, 'Lending Library: nightly audit — all clear',
-      'No double bookings. All confirmed reservations have calendar invites. Nothing to action.');
+      'No double bookings, no missing calendar invites, no overdue status updates. Nothing to action.');
     return;
   }
   var parts = [];
-  if (conflicts.length) parts.push(conflicts.length + ' double-booking conflict(s)');
-  if (missing.length)   parts.push(missing.length + ' missing calendar invite(s)');
+  if (conflicts.length)      parts.push(conflicts.length + ' double-booking conflict(s)');
+  if (missing.length)        parts.push(missing.length + ' missing calendar invite(s)');
+  if (overduePickups.length) parts.push(overduePickups.length + ' overdue pickup(s)');
+  if (overdueReturns.length) parts.push(overdueReturns.length + ' overdue return(s)');
   var body = '';
   if (conflicts.length) {
     body += '=== DOUBLE BOOKINGS ===\n\n';
@@ -1202,6 +1249,18 @@ function nightlyAudit() {
       });
       body += '\n';
     });
+  }
+  if (overduePickups.length || overdueReturns.length) {
+    if (body) body += '\n';
+    body += '=== OVERDUE STATUS UPDATES ===\n\n';
+    if (overduePickups.length) {
+      body += 'Pickup date passed, still "Confirmed" — mark Lent Out or follow up:\n';
+      body += overduePickups.join('\n') + '\n\n';
+    }
+    if (overdueReturns.length) {
+      body += 'Return date passed, still checked out — mark Returned or follow up:\n';
+      body += overdueReturns.join('\n') + '\n\n';
+    }
   }
   if (missing.length) {
     if (body) body += '\n';
@@ -1733,4 +1792,5 @@ function findOldTitleInvites() {
     Logger.log('All done — no events with old title format found.');
   }
 }
+
 ```

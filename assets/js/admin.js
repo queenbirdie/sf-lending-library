@@ -1,6 +1,6 @@
 var adminPasscode = sessionStorage.getItem('sfll_admin_passcode') || '';
 var TIME_WINDOWS = ['8 - 9am', '9 - 10am', '10 - 11am', '11am - 12pm', '12 - 1pm', '1 - 2pm', '2 - 3pm', '3 - 4pm', '4 - 5pm', '5 - 6pm', '6 - 7pm', '7 - 8pm'];
-var SECTION_KEYS = ['pending', 'todayReturns', 'upcoming', 'pickups', 'returns', 'checkedOut', 'overdue', 'conflicts', 'pastReservations'];
+var SECTION_KEYS = ['pending', 'todayReturns', 'upcoming', 'pickups', 'returns', 'checkedOut', 'overduePickups', 'overdue', 'conflicts', 'pastReservations'];
 var DEFAULT_COLLAPSED_KEYS = { pastReservations: true };
 var sectionCollapseOverride = {};
 var isolatedSection = null;
@@ -49,6 +49,7 @@ function loadAdminData(cb, opts) {
     renderGroupedSection('pickupsList', 'pickupsCount', sortByDateTime(data.tomorrowPickups || [], 'pickupDateISO', 'pickupTime'), ['markLentOut', 'revise', 'cancel'], { label: 'Mark all lent out', status: 'Lent Out', hoistMeta: false }, 'pickup');
     renderSection('returnsList', 'returnsCount', sortByDateTime(data.tomorrowReturns || [], 'returnDateISO', 'returnTime'), ['markReturned', 'revise'], false, 'return');
     renderSection('checkedOutList', 'checkedOutCount', sortByDateTime(data.checkedOut || [], 'returnDateISO', 'returnTime'), ['markReturned', 'lostDamaged', 'revise'], false, 'return');
+    renderSection('overduePickupsList', 'overduePickupsCount', data.overduePickups || [], ['markLentOut', 'revise', 'cancel'], true, 'pickup');
     renderSection('overdueList', 'overdueCount', data.overdue || [], ['markReturned', 'revise'], true, 'return');
     renderConflicts(data.conflicts || []);
     renderPastReservations('pastReservationsList', 'pastReservationsCount', data.pastReservations || []);

@@ -11,15 +11,23 @@ if (adminPasscode) {
   loadAdminData();
 }
 
+var unlockInFlight = false;
+
 function unlockAdmin() {
+  if (unlockInFlight) return;
   var val = document.getElementById('passcodeInput').value.trim();
   var errEl = document.getElementById('lockError');
   errEl.style.display = 'none';
   if (!val) return;
+  unlockInFlight = true;
+  var btn = document.querySelector('#lockScreen .modal-submit-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Unlocking...'; }
   adminPasscode = val;
   document.getElementById('lockScreen').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
   loadAdminData(function(ok) {
+    unlockInFlight = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Unlock'; }
     if (!ok) {
       document.getElementById('dashboard').style.display = 'none';
       document.getElementById('lockScreen').style.display = 'block';

@@ -197,12 +197,18 @@ function getAdminData(passcode) {
     var xItemId = String(x.r[5] || '').trim();
     var rowLibraryKey = String(x.r[0]).trim();
     var itemLibs = getItemLibraries(xItemId, itemName, rowLibraryKey, invRows);
-    var itemKey = itemLibs.slice().sort().join(',') + '|' + itemName;
+    // Group/match by Item ID when available — same ID-first-with-name-fallback
+    // rule used everywhere else (findInventoryRow, checkAvailability,
+    // auditForDoubleBookings), so a renamed item's rows still group together
+    // and two different items that happen to share a name aren't merged.
+    var itemKey = itemLibs.slice().sort().join(',') + '|' + (xItemId || itemName);
     if (seenItems[itemKey]) return;
     seenItems[itemKey] = true;
     var totalQty = getItemQty(xItemId, itemName, rowLibraryKey, invRows);
     var itemRows = active.filter(function(y) {
-      return String(y.r[7]).trim() === itemName && itemLibs.indexOf(String(y.r[0]).trim()) !== -1;
+      var yItemId = String(y.r[5] || '').trim();
+      var sameItem = (xItemId && yItemId) ? (yItemId === xItemId) : (String(y.r[7]).trim() === itemName);
+      return sameItem && itemLibs.indexOf(String(y.r[0]).trim()) !== -1;
     });
     var dates = [];
     itemRows.forEach(function(y) {

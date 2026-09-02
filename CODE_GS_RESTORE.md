@@ -544,9 +544,10 @@ function reminderWhatsAppLink(phone) {
 // Tags column (comma-separated, e.g. "launder, parts"). Add a tag here and to
 // items in the sheet to introduce a new guideline; items with no tags don't
 // add any tag-driven bullets. Separately, a "keep items separate" bullet
-// shows automatically whenever a return covers more than one item — that
-// one isn't item-specific, so it's not a tag (see multiItemNote below).
-// The closing line always shows regardless of any of the above.
+// shows automatically whenever a return covers more than one item (except
+// for Yoto, where it isn't relevant) — that one isn't item-specific, so
+// it's not a tag (see multiItemNote below). The closing line always shows
+// regardless of any of the above.
 var CARE_GUIDELINES = [
   { tag: 'pieces', text: 'Ensure you\'re returning with all puzzle/game/toy pieces — for anything under 100 pieces, a manual count is appreciated' },
   { tag: 'parts',  text: 'Double-check for stray parts (clips, chargers, small accessories) so nothing gets left behind' },
@@ -603,7 +604,9 @@ function buildReminderEmail(kind, firstName, lib, deco, dateFmt, time, items, ca
   var itemListHtml = items.map(function(i) { return '<div style="padding:3px 0;">• ' + i + '</div>'; }).join('');
   // Not item-specific, so it lives outside CARE_GUIDELINES/tags — shows
   // whenever a return covers more than one item, regardless of what's tagged.
-  var multiItemNote = (!isPickup && items.length > 1)
+  // Skipped for Yoto: cards/gear there don't get "tucked inside" one another
+  // the way gear/costume pieces do, so the note isn't relevant.
+  var multiItemNote = (!isPickup && items.length > 1 && lib.key !== 'yoto')
     ? 'Returning more than one item? Keep them separate — nothing tucked inside something else (easy for me to miss when I\'m putting things away!)'
     : '';
   var careBulletItems = multiItemNote ? careItems.concat([multiItemNote]) : careItems;

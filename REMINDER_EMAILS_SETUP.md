@@ -210,14 +210,17 @@ already do this?" instead of re-reading `Code.js`.
 
 | Date | Rule | Why | Where in code |
 |---|---|---|---|
-| 2026-09 | "Keep them separate" multi-item note is suppressed when a return is *exactly* Kid & Travel Gear's car seat (`KG-101`) + carrier (`KG-162`), nothing else mixed in | The car seat is meant to sit inside the carrier — nesting them is the correct way to return this pair, not something to warn against | `NESTING_EXPECTED_ITEM_SETS` + `isNestingExpectedSet()`, used in `sendReturnReminders()` and `buildReminderEmail()`'s `suppressMultiItemNote` param |
+| (earlier, undated) | "Keep them separate, nothing tucked inside something else" note added automatically to any return covering more than one item, **unless a more specific exception below says otherwise** | General reminder — easy to miss an item tucked inside another when putting things away | `multiItemNote` inside `buildReminderEmail()` |
+| 2026-09 | ↳ Exception: the note above is suppressed when a return is *exactly* Kid & Travel Gear's car seat (`KG-101`) + carrier (`KG-162`), nothing else mixed in | The car seat is meant to sit inside the carrier — nesting them is the correct way to return this pair, not something to warn against | `NESTING_EXPECTED_ITEM_SETS` + `isNestingExpectedSet()`, used in `sendReturnReminders()` and `buildReminderEmail()`'s `suppressMultiItemNote` param |
 | (earlier, undated) | A guideline shared by more than one item in the same return collapses to one unattributed bullet instead of repeating per item | Attribution wouldn't disambiguate anything once the same guideline applies to more than one item (e.g. several Yoto cards all tagged `spot-clean`) | `careGuidelinesByItem()` |
-| (earlier, undated) | "Keep them separate, nothing tucked inside something else" note added automatically to any return covering more than one item | General reminder — easy to miss an item tucked inside another when putting things away | `multiItemNote` inside `buildReminderEmail()` |
 | (earlier, undated) | Removed the "leave it as good as you found it" closing line | No longer wanted | (removed; no longer in code) |
 
-To add another item-set exception like the car seat/carrier one: add
-another array to `NESTING_EXPECTED_ITEM_SETS` (e.g. `['XX-1', 'XX-2']`),
-then add a row to the table above.
+Rules are listed in the order they were added, top-to-bottom, **except**
+exceptions (↳) are kept directly under the general rule they modify so
+you don't read the general rule in isolation and miss that it's
+qualified. To add another item-set exception like the car seat/carrier
+one: add another array to `NESTING_EXPECTED_ITEM_SETS` (e.g. `['XX-1',
+'XX-2']`), then add a row directly under the multi-item note rule above.
 
 **To check it's working:** run `testReturnReminderEmail()` (see "Preview it
 for real" above). It looks up real Care Tags for the sample item names set

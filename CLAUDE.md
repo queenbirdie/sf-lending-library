@@ -39,9 +39,9 @@ never via `create_draft`.
 ## Pickup & return reminder emails
 
 `buildReminderEmail(kind, firstName, lib, deco, dateFmt, time, items,
-careItems)` in `Code.js` is the single shared template for both the
-pickup and return reminder emails (`kind: 'pickup' | 'return'`) — don't
-fork it into two copies. Sent by `sendPickupReminders()` /
+careItems, suppressMultiItemNote)` in `Code.js` is the single shared
+template for both the pickup and return reminder emails (`kind: 'pickup' |
+'return'`) — don't fork it into two copies. Sent by `sendPickupReminders()` /
 `sendReturnReminders()`, each on a twice-daily trigger (8am standard run +
 4pm catch-all for late status changes), deduped per day via Script
 Properties so the two runs never double-send. Full details:
@@ -63,9 +63,14 @@ read via `getItemCareTags()`. Current tags, defined in `CARE_GUIDELINES`:
 that apply to what's actually being returned show up — untagged items add
 nothing. A separate, non-tag `multiItemNote` bullet shows automatically
 whenever a return covers more than one item ("keep them separate, nothing
-tucked inside something else"). No "leave it as good as you found it"
-closing line anymore — removed per Lauren's request. Full tag table and
-tagging conventions: `REMINDER_EMAILS_SETUP.md`.
+tucked inside something else") — unless the return is exactly one of the
+item-ID sets in `NESTING_EXPECTED_ITEM_SETS` (e.g. `KG-101` + `KG-162`,
+car seat + carrier, where the car seat is meant to sit inside the
+carrier), in which case the note is suppressed since nesting is correct
+for that pairing. No "leave it as good as you found it" closing line
+anymore — removed per Lauren's request. Full tag table, tagging
+conventions, and the running log of these rules/exceptions:
+`REMINDER_EMAILS_SETUP.md`.
 
 `careGuidelinesByItem()` attributes each guideline to the item it came
 from ("(Item Name)") on multi-item returns — but only when that guideline

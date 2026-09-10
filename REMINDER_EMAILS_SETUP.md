@@ -199,6 +199,26 @@ optional **Care Tags** column on the `inventory` sheet.
 You don't have to tag everything at once — untagged items simply don't add
 extra guidance, so this is safe to fill in gradually.
 
+## Care guideline rules & exceptions log
+
+Everything above (the tag table, attribution, the shared-guideline
+collapse) is the *general* system. Beyond that, one-off rules sometimes
+get added for a specific item or pairing — easy to forget you've already
+set one once there are a few. This is the running list; **add a row here
+whenever you introduce a new one**, so you have one place to check "did I
+already do this?" instead of re-reading `Code.js`.
+
+| Date | Rule | Why | Where in code |
+|---|---|---|---|
+| 2026-09 | "Keep them separate" multi-item note is suppressed when a return is *exactly* Kid & Travel Gear's car seat (`KG-101`) + carrier (`KG-162`), nothing else mixed in | The car seat is meant to sit inside the carrier — nesting them is the correct way to return this pair, not something to warn against | `NESTING_EXPECTED_ITEM_SETS` + `isNestingExpectedSet()`, used in `sendReturnReminders()` and `buildReminderEmail()`'s `suppressMultiItemNote` param |
+| (earlier, undated) | A guideline shared by more than one item in the same return collapses to one unattributed bullet instead of repeating per item | Attribution wouldn't disambiguate anything once the same guideline applies to more than one item (e.g. several Yoto cards all tagged `spot-clean`) | `careGuidelinesByItem()` |
+| (earlier, undated) | "Keep them separate, nothing tucked inside something else" note added automatically to any return covering more than one item | General reminder — easy to miss an item tucked inside another when putting things away | `multiItemNote` inside `buildReminderEmail()` |
+| (earlier, undated) | Removed the "leave it as good as you found it" closing line | No longer wanted | (removed; no longer in code) |
+
+To add another item-set exception like the car seat/carrier one: add
+another array to `NESTING_EXPECTED_ITEM_SETS` (e.g. `['XX-1', 'XX-2']`),
+then add a row to the table above.
+
 **To check it's working:** run `testReturnReminderEmail()` (see "Preview it
 for real" above). It looks up real Care Tags for the sample item names set
 in that function (`itemNames`, near the top) — change those to real item

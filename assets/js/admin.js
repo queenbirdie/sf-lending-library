@@ -1,5 +1,5 @@
 var adminPasscode = sessionStorage.getItem('sfll_admin_passcode') || '';
-var TIME_WINDOWS = ['8 - 9am', '9 - 10am', '10 - 11am', '11am - 12pm', '12 - 1pm', '1 - 2pm', '2 - 3pm', '3 - 4pm', '4 - 5pm', '5 - 6pm', '6 - 7pm', '7 - 8pm'];
+var TIME_WINDOWS = ['8 - 9am', '9 - 10am', '10 - 11am', '11am - 12pm', '12 - 1pm', '1 - 2pm', '2 - 3pm', '3 - 4pm', '4 - 5pm', '5 - 6pm', '6 - 7pm'];
 var SECTION_KEYS = ['pending', 'todayReturns', 'upcoming', 'pickups', 'returns', 'checkedOut', 'overduePickups', 'overdue', 'conflicts', 'pastReservations'];
 var DEFAULT_COLLAPSED_KEYS = { pastReservations: true };
 var sectionCollapseOverride = {};
@@ -255,6 +255,9 @@ function timeSelectHtml(id, current) {
   TIME_WINDOWS.forEach(function(t) {
     opts += '<option' + (t === current ? ' selected' : '') + '>' + esc(t) + '</option>';
   });
+  if (current && TIME_WINDOWS.indexOf(current) === -1) {
+    opts += '<option selected>' + esc(current) + '</option>';
+  }
   return '<select id="' + id + '">' + opts + '</select>';
 }
 

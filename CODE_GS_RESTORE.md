@@ -556,6 +556,25 @@ var CARE_GUIDELINES = [
   { tag: 'fold',   text: 'Pack it up neatly, especially if it comes in any sort of carrying case' }
 ];
 
+// Item-ID sets where nesting one item inside another is the *correct* way
+// to return them, so the automatic "keep them separate" note below would
+// be wrong advice for that pairing. Suppressed only when a return is
+// *exactly* one of these sets (by distinct item ID, quantity doesn't
+// matter) — nothing else mixed in. Add a new array here to introduce
+// another such exception, and log it in REMINDER_EMAILS_SETUP.md's rules
+// log so it's easy to find later.
+var NESTING_EXPECTED_ITEM_SETS = [
+  ['KG-101', 'KG-162'] // car seat + carrier — car seat is meant to sit inside the carrier
+];
+
+function isNestingExpectedSet(itemIds) {
+  var unique = [];
+  (itemIds || []).forEach(function(id) { if (id && unique.indexOf(id) === -1) unique.push(id); });
+  return NESTING_EXPECTED_ITEM_SETS.some(function(set) {
+    return set.length === unique.length && set.every(function(id) { return unique.indexOf(id) !== -1; });
+  });
+}
+
 // Resolves collected tags to guideline text, grouped by item rather than
 // by tag — all of the first item's guidelines, then the second's, and so
 // on — so a multi-item return reads as "here's what to do for item A,
@@ -589,7 +608,7 @@ function careGuidelinesByItem(itemOrder, itemTags, showAttribution) {
   });
 }
 
-function buildReminderEmail(kind, firstName, lib, deco, dateFmt, time, items, careItems) {
+function buildReminderEmail(kind, firstName, lib, deco, dateFmt, time, items, careItems, suppressMultiItemNote) {
   var isPickup = kind === 'pickup';
   careItems = careItems || [];
   var verb = isPickup ? 'pickup' : 'return';
@@ -603,7 +622,10 @@ function buildReminderEmail(kind, firstName, lib, deco, dateFmt, time, items, ca
   var itemListHtml = items.map(function(i) { return '<div style="padding:3px 0;">• ' + i + '</div>'; }).join('');
   // Not item-specific, so it lives outside CARE_GUIDELINES/tags — shows
   // whenever a return covers more than one item, regardless of what's tagged.
-  var multiItemNote = (!isPickup && items.length > 1)
+  // Skipped when suppressMultiItemNote is set — e.g. a car seat + carrier
+  // return, where nesting one inside the other is correct, not an oversight
+  // (see NESTING_EXPECTED_ITEM_SETS).
+  var multiItemNote = (!isPickup && items.length > 1 && !suppressMultiItemNote)
     ? 'Returning more than one item? Keep them separate — nothing tucked inside something else (easy for me to miss when I\'m putting things away!)'
     : '';
   var careBulletItems = multiItemNote ? careItems.concat([multiItemNote]) : careItems;
@@ -747,11 +769,12 @@ function sendReturnReminders() {
     var key = libraryKey + '|' + email + '|' + String(r[13] || '').trim();
     if (!groups[key]) {
       order.push(key);
-      groups[key] = { library: libraryKey, name: String(r[2]).trim(), email: email, time: String(r[13] || '').trim(), items: [], careItemOrder: [], careTagsByItem: {} };
+      groups[key] = { library: libraryKey, name: String(r[2]).trim(), email: email, time: String(r[13] || '').trim(), items: [], itemIds: [], careItemOrder: [], careTagsByItem: {} };
     }
     groups[key].items.push(itemLabel(r));
     var itemName = String(r[7]).trim();
     var itemId = String(r[5] || '').trim();
+    groups[key].itemIds.push(itemId);
     var tags = getItemCareTags(itemId, itemName, libraryKey, invRows);
     if (tags.length) {
       if (groups[key].careItemOrder.indexOf(itemName) === -1) groups[key].careItemOrder.push(itemName);
@@ -771,7 +794,8 @@ function sendReturnReminders() {
     var deco = REMINDER_DECOR[g.library] || REMINDER_DECOR['kid-gear'];
     var firstName = g.name.split(' ')[0];
     var careItems = careGuidelinesByItem(g.careItemOrder, g.careTagsByItem, g.items.length > 1);
-    var email = buildReminderEmail('return', firstName, lib, deco, returnFmt, g.time, g.items, careItems);
+    var suppressMultiItemNote = isNestingExpectedSet(g.itemIds);
+    var email = buildReminderEmail('return', firstName, lib, deco, returnFmt, g.time, g.items, careItems, suppressMultiItemNote);
     GmailApp.sendEmail(g.email, email.subject, email.text, { htmlBody: email.html, bcc: Session.getEffectiveUser().getEmail() });
     props.setProperty(sentKey, 'sent');
   });

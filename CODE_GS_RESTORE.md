@@ -523,7 +523,7 @@ function sendReceiptEmail(data, items, libraryKey) {
     'Once your reservation is confirmed on our end, you\'ll receive calendar invitations for pickup and return along with the address for the lending library.\n\n' +
     'If you\'re driving, you\'re welcome to park temporarily in front of the house. The tow away signs are ours — just be mindful of street sweeping.\n\n' +
     'In the meantime, check out our FAQs at sflendinglibrary.org for everything you need to know.\n\n' +
-    'Questions? Just reply to this email.\n\n' +
+    'Questions? WhatsApp me at ' + lib.phone + ': ' + reminderWhatsAppLink(lib.phone) + '\n\n' +
     'Thanks,\nLauren';
   GmailApp.sendEmail(email, subject, body, { bcc: Session.getEffectiveUser().getEmail() });
 }

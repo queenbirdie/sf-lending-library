@@ -523,7 +523,7 @@ function sendReceiptEmail(data, items, libraryKey) {
     'Once your reservation is confirmed on our end, you\'ll receive calendar invitations for pickup and return along with the address for the lending library.\n\n' +
     'If you\'re driving, you\'re welcome to park temporarily in front of the house. The tow away signs are ours — just be mindful of street sweeping.\n\n' +
     'In the meantime, check out our FAQs at sflendinglibrary.org for everything you need to know.\n\n' +
-    'Questions? Just reply to this email.\n\n' +
+    'Questions? WhatsApp me at ' + lib.phone + ': ' + reminderWhatsAppLink(lib.phone) + '\n\n' +
     'Thanks,\nLauren';
   GmailApp.sendEmail(email, subject, body, { bcc: Session.getEffectiveUser().getEmail() });
 }
@@ -972,9 +972,9 @@ function sendCalendarInvites(data, items, libraryKey) {
     'PARKING & MISC\n' +
     'Feel free to park temporarily in front of the house — the tow away signs are ours. Check street sweeping times before you arrive (M/W/F 9 - 11am). Lastly, we have a very friendly but barky dog, she\'ll likely say hi!\n\n' +
     'CHECKLIST\n' +
-    '☐ Text or WhatsApp Lauren the day before to confirm pickup details\n' +
+    '☐ WhatsApp Lauren the day before to confirm pickup details\n' +
     '☐ Pick up your items at ' + lib.address.split(',')[0] + '\n' +
-    '☐ Text or WhatsApp Lauren once you\'ve picked up (if not in person)\n' +
+    '☐ WhatsApp Lauren once you\'ve picked up (if not in person)\n' +
     '☐ Questions? sflendinglibrary.org';
   var returnDesc =
     multiUnitBanner +
@@ -982,9 +982,9 @@ function sendCalendarInvites(data, items, libraryKey) {
     'Returning:\n' + itemList + '\n\n' +
     'Pickup date: ' + pickupFmt + '\n\n' +
     'CHECKLIST\n' +
-    '☐ Text or WhatsApp Lauren the day before to confirm return details\n' +
+    '☐ WhatsApp Lauren the day before to confirm return details\n' +
     '☐ Return items in the same condition you borrowed them\n' +
-    '☐ Text or WhatsApp Lauren once you\'ve returned (if not in person)\n' +
+    '☐ WhatsApp Lauren once you\'ve returned (if not in person)\n' +
     '☐ Loved it? Consider a donation to keep the library going — Venmo @lrturon\n' +
     '☐ Questions? sflendinglibrary.org';
   Calendar.Events.insert({

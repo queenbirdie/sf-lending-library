@@ -18,7 +18,12 @@ actions, etc.) means:
 
 1. Edit the code inside the ```` ```javascript ```` block in
    `CODE_GS_RESTORE.md` (it's the complete, paste-ready file — always keep
-   it that way, not a diff or excerpt).
+   it that way, not a diff or excerpt). **Also update the "Last updated"
+   timestamp in the header comment** (top of the file, right under `SF
+   LENDING LIBRARY — Google Apps Script`) to the actual current date/time
+   — get it with `TZ=America/Los_Angeles date "+%Y-%m-%d %-I:%M %p %Z"`
+   rather than guessing, so it reflects when the code actually last
+   changed (not when the file was first created).
 2. **Always syntax-check before committing** — extract the code block and
    run `node --check` on it. This has caught real mistakes; don't skip it.
 3. Tell the user to: open the Apps Script editor → `Code.js` → select all →

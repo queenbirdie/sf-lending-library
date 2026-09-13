@@ -14,7 +14,7 @@ version → Deploy.**
 ```javascript
 // ==========================================
 // SF LENDING LIBRARY — Google Apps Script
-// v2.0 Unified — April 2026
+// v2.0 Unified — Last updated: 2026-09-12 2:53 PM PT
 // ==========================================
 
 // ── Tabs ─────────────────────────────────

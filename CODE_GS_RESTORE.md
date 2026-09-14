@@ -14,7 +14,7 @@ version → Deploy.**
 ```javascript
 // ==========================================
 // SF LENDING LIBRARY — Google Apps Script
-// v2.0 Unified — Last updated: 2026-09-12 2:53 PM PT
+// v2.0 Unified — Last updated: 2026-09-14 10:12 AM PT
 // ==========================================
 
 // ── Tabs ─────────────────────────────────
@@ -184,6 +184,7 @@ function submitReservation(formData) {
     var name          = String(formData.name        || '').trim();
     var email         = String(formData.email       || '').trim();
     var phone         = String(formData.phone       || '').trim();
+    var referralSource = String(formData.referralSource || '').trim();
     var pickupDateStr = String(formData.pickupDate  || '').trim();
     var pickupTime    = String(formData.pickupTime  || '').trim();
     var returnDateStr = String(formData.returnDate  || '').trim();
@@ -192,6 +193,7 @@ function submitReservation(formData) {
     if (!name)   return { success: false, message: 'Name is required.' };
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { success: false, message: 'A valid email address is required.' };
     if (!phone)  return { success: false, message: 'Phone number is required.' };
+    if (!referralSource) return { success: false, message: 'Please tell us how you heard about us.' };
     if (!pickupDateStr || !returnDateStr) return { success: false, message: 'Pickup and return dates are required.' };
     if (!items.length) return { success: false, message: 'No items selected.' };
     if (!libraryKey || !isKnownLibrary(libraryKey)) return { success: false, message: 'Invalid library.' };
@@ -227,7 +229,14 @@ function submitReservation(formData) {
       if (availStatus === '✗ Unavailable') { unavailable.push(itemName); return; }
       var brand        = getItemBrand(itemId, itemName, libraryKey, invRows);
       var size         = getItemSize(itemId, itemName, libraryKey, invRows);
-      newRows.push([libraryKey, timestamp, name, email, phone, itemId, brand, itemName, requestedQty, size, pickupDate, pickupTime, returnDate, returnTime, availStatus, 'Pending', '']);
+      // Cols R (Actual Return Date) and S (# of Days Returned Late) stay blank
+      // here — they're filled in later on return, not at submission — so
+      // Referral Source is appended past them as col T rather than inserted
+      // earlier in the row, which would shift every other function's
+      // hardcoded reservation-row index (r[0], r[5], r[12], etc. throughout
+      // this file — reservation columns aren't named constants like the
+      // inventory sheet's COL_* ones).
+      newRows.push([libraryKey, timestamp, name, email, phone, itemId, brand, itemName, requestedQty, size, pickupDate, pickupTime, returnDate, returnTime, availStatus, 'Pending', '', '', '', referralSource]);
     });
     if (unavailable.length) return { success: false, message: 'The following item(s) are not available for your selected dates: ' + unavailable.join(', ') + '. Please choose different dates or remove these items from your cart.' };
     var lastRow = sheet.getLastRow();
@@ -244,7 +253,7 @@ function colorizeReservations(sheet) {
   if (!s) return;
   var lastRow = s.getLastRow();
   if (lastRow < 2) return;
-  var numCols  = 19;
+  var numCols  = 20; // A–T, including Referral Source (T)
   var colorA   = '#ffffff';
   var colorB   = '#f0ebe7';
   var SKIP_STATUSES = ['Returned', 'Cancelled', 'Lost or Damaged'];
@@ -280,7 +289,7 @@ function getOrCreateReservationsSheet() {
   var sheet = ss.getSheetByName(RSVP_TAB);
   if (!sheet) {
     sheet = ss.insertSheet(RSVP_TAB);
-    var headers = ['Library','Timestamp','Name','Email','Phone','Item ID','Brand','Item Name','Qty Requested','Size','Pickup Date','Pickup Time','Return Date','Return Time','Availability Status','Status','Notes','Actual Return Date','# of Days Returned Late'];
+    var headers = ['Library','Timestamp','Name','Email','Phone','Item ID','Brand','Item Name','Qty Requested','Size','Pickup Date','Pickup Time','Return Date','Return Time','Availability Status','Status','Notes','Actual Return Date','# of Days Returned Late','Referral Source'];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold').setBackground('#f3f3f3');
     sheet.setFrozenRows(1);
     fixReservationDropdown(sheet);

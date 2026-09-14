@@ -86,6 +86,33 @@ identical line once per item, since attribution wouldn't disambiguate
 anything once it applies to more than one thing. This is a general rule,
 not a per-library special case.
 
+## Referral source ("How did you hear about us?")
+
+Required free-text field on the request form (`modalReferralSource` in
+`layouts/library.html`) — required (not a dropdown) so people have to
+actually type something instead of clicking whatever option is nearest,
+per Lauren's call. Enforced in the same three-places pattern as other
+required fields:
+- `assets/js/library.js` `submitForm()`: pre-submit validation.
+- `Code.js` `submitReservation()`: the real gate — rejects the request if
+  blank.
+
+Stored as **column T ("Referral Source"), appended at the end** of the
+`reservations` sheet — not inserted earlier in the row — because
+reservation columns (unlike the inventory sheet's `COL_*` constants)
+aren't named; most functions read them by raw numeric index (`r[0]`,
+`r[5]`, `r[12]`, etc. throughout `Code.js`). Inserting a new column
+anywhere before the existing ones would silently shift every one of those
+indices. Appending avoids that entirely. `colorizeReservations()`'s
+`numCols` was bumped from 19 to 20 to match so row-banding still covers
+the new column.
+
+**One-time manual step**: `getOrCreateReservationsSheet()` only writes
+headers when it creates the sheet from scratch, which won't happen again
+on the live sheet — so the "Referral Source" header needs to be added to
+column T by hand, the same one-time pattern as the Care Tags column (see
+`REMINDER_EMAILS_SETUP.md`).
+
 ## Booking lead time
 
 `BOOKING_LEAD_DAYS = 2` — the earliest a pickup can be booked is 2

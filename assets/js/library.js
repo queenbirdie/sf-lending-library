@@ -428,9 +428,11 @@ function submitForm() {
   var pickupTime = document.getElementById('modalPickupTime').value;
   var returnDate = document.getElementById('modalReturnDate').value;
   var returnTime = document.getElementById('modalReturnTime').value;
+  var referralSource = document.getElementById('modalReferralSource').value.trim();
   if (!name)  { showModalError('Name is required.'); return; }
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showModalError('A valid email address is required.'); return; }
   if (!phone) { showModalError('Phone number is required.'); return; }
+  if (!referralSource) { showModalError('Please tell us how you heard about us.'); return; }
   if (!pickupTime) { showModalError('Please select a pickup time window.'); return; }
   if (!returnTime) { showModalError('Please select a return time window.'); return; }
   var signature = document.getElementById('modalSignature').value.trim();
@@ -454,6 +456,7 @@ function submitForm() {
   document.getElementById('viewLoading').style.display = 'block';
   apiPost(
     { action: 'submitReservation', name: name, email: email, phone: phone,
+      referralSource: referralSource,
       pickupDate: pickupDate, pickupTime: pickupTime,
       returnDate: returnDate, returnTime: returnTime,
       items: itemsPayload, libraryKey: libraryKey },

@@ -25,13 +25,13 @@ function unlockAdmin() {
   adminPasscode = val;
   document.getElementById('lockScreen').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
-  loadAdminData(function(ok) {
+  loadAdminData(function(ok, message) {
     unlockInFlight = false;
     if (btn) { btn.disabled = false; btn.textContent = 'Unlock'; }
     if (!ok) {
       document.getElementById('dashboard').style.display = 'none';
       document.getElementById('lockScreen').style.display = 'block';
-      errEl.textContent = 'Incorrect passcode.';
+      errEl.textContent = message || 'Incorrect passcode.';
       errEl.style.display = 'block';
       adminPasscode = '';
     } else {
@@ -49,7 +49,7 @@ function loadAdminData(cb, opts) {
   apiPost({ action: 'admin', passcode: adminPasscode }, function(data) {
     if (!silent) document.getElementById('adminLoading').style.display = 'none';
     var ok = data && Array.isArray(data.pending);
-    if (!ok) { if (cb) cb(false); return; }
+    if (!ok) { if (cb) cb(false, data && (data.error || data.message)); return; }
     document.getElementById('adminContent').style.display = 'block';
     renderGroupedSection('pendingList', 'pendingCount', data.pending, ['confirm', 'decline', 'revise'], { label: 'Confirm all', status: 'Confirmed', hoistMeta: true });
     renderGroupedSection('todayReturnsList', 'todayReturnsCount', sortByDateTime(data.todayReturns || [], 'returnDateISO', 'returnTime'), ['markReturned', 'lostDamaged', 'revise'], { label: 'Mark all returned', status: 'Returned', hoistMeta: false }, 'return');
@@ -64,9 +64,9 @@ function loadAdminData(cb, opts) {
     SECTION_KEYS.forEach(applySectionState);
     filterAdminSearch(document.getElementById('adminSearch').value);
     if (cb) cb(true);
-  }, function() {
+  }, function(err) {
     if (!silent) document.getElementById('adminLoading').style.display = 'none';
-    if (cb) cb(false);
+    if (cb) cb(false, 'Could not reach the server' + (err && err.message ? ' (' + err.message + ')' : '') + '.');
   });
 }
 

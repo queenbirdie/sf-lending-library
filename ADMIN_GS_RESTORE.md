@@ -285,82 +285,112 @@ function adminBatchUpdateStatus(formData) {
   return { success: true };
 }
 
+// Revises one reservation row (single-item revise, formData.row) or several
+// at once (multi-item group revise, formData.rows: [{row, qty}, ...] — all
+// sharing the same new pickup/return date+time from one group-revise form).
+// Batching the group case into one call — rather than the frontend looping
+// one adminReviseReservation call per row — matters because calendar invites
+// are combined across a whole reservation: validate/write every row first,
+// then delete the old combined invite and recreate exactly one new combined
+// invite from the full, post-revise item list. Doing this per row instead
+// (as the old code did) deleted+recreated the invite once per item, leaving
+// one separate calendar invite per item rather than a single combined one.
 function adminReviseReservation(formData) {
   if (!checkAdminPasscode(formData.passcode)) return { success: false, message: 'Invalid passcode.' };
-  var row = parseInt(formData.row);
-  if (!row || row < 2) return { success: false, message: 'Invalid request.' };
 
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
-  var data = sheet.getRange(row, 1, 1, 19).getValues()[0];
-  var libraryKey = String(data[0]).trim();
-  var itemId = String(data[5] || '').trim();
-  var itemName = String(data[7]).trim();
-  var status = String(data[15]).trim();
-  var oldPickupDate = data[10];
-  var oldReturnDate = data[12];
+  var rowsInput = Array.isArray(formData.rows) ? formData.rows : [{ row: formData.row, qty: formData.qty }];
+  var entries = rowsInput.map(function(r) { return { row: parseInt(r.row), qty: parseInt(r.qty) }; });
+  if (!entries.length || entries.some(function(e) { return !e.row || e.row < 2; })) {
+    return { success: false, message: 'Invalid request.' };
+  }
 
   var newPickupDateStr = String(formData.pickupDate || '').trim();
   var newPickupTime = String(formData.pickupTime || '').trim();
   var newReturnDateStr = String(formData.returnDate || '').trim();
   var newReturnTime = String(formData.returnTime || '').trim();
-  var newQty = parseInt(formData.qty);
-  if (isNaN(newQty) || newQty < 1) newQty = 1;
-
   if (!newPickupDateStr || !newReturnDateStr) return { success: false, message: 'Pickup and return dates are required.' };
   var newPickupDate = parseDateString(newPickupDateStr);
   var newReturnDate = parseDateString(newReturnDateStr);
   if (newReturnDate <= newPickupDate) return { success: false, message: 'Return date must be after pickup date.' };
 
-  // Re-check availability against every OTHER row (excluding this reservation itself)
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var invRows = ss.getSheetByName(INV_TAB).getDataRange().getValues();
   var allRsvpRows = sheet.getDataRange().getValues().slice(1);
-  var otherRows = [];
-  for (var i = 0; i < allRsvpRows.length; i++) {
-    if (i + 2 === row) continue;
-    otherRows.push(allRsvpRows[i]);
-  }
-  var availStatus = checkAvailability(itemId, itemName, newPickupDate, newReturnDate, newQty, libraryKey, invRows, otherRows);
-  if (availStatus === '✗ Unavailable') {
-    return { success: false, message: 'Not enough availability for the new dates/quantity.' };
+  var reviseRowNums = entries.map(function(e) { return e.row; });
+
+  // Validate every row in this batch (against every OTHER row — i.e. every
+  // row not part of this same revise batch) before writing anything, so a
+  // conflict on any one item aborts the whole revise instead of leaving it
+  // partially applied.
+  var rowInfos = [];
+  for (var k = 0; k < entries.length; k++) {
+    var row = entries[k].row;
+    var qty = (!isNaN(entries[k].qty) && entries[k].qty >= 1) ? entries[k].qty : 1;
+    var data = sheet.getRange(row, 1, 1, 19).getValues()[0];
+    var libraryKey = String(data[0]).trim();
+    var itemId = String(data[5] || '').trim();
+    var itemName = String(data[7]).trim();
+    var status = String(data[15]).trim();
+    var otherRows = [];
+    for (var i = 0; i < allRsvpRows.length; i++) {
+      if (reviseRowNums.indexOf(i + 2) !== -1) continue;
+      otherRows.push(allRsvpRows[i]);
+    }
+    var availStatus = checkAvailability(itemId, itemName, newPickupDate, newReturnDate, qty, libraryKey, invRows, otherRows);
+    if (availStatus === '✗ Unavailable') {
+      return { success: false, message: 'Not enough availability for the new dates/quantity' + (entries.length > 1 ? ' (' + itemName + ')' : '') + '.' };
+    }
+    rowInfos.push({ row: row, qty: qty, data: data, libraryKey: libraryKey, itemName: itemName, status: status, availStatus: availStatus });
   }
 
+  var libraryKey = rowInfos[0].libraryKey;
+  var oldPickupDate = rowInfos[0].data[10];
+  var oldReturnDate = rowInfos[0].data[12];
+  var firstName = String(rowInfos[0].data[2]).trim().split(' ')[0];
   // If calendar invites were already sent (Confirmed/Lent Out/Added to existing request),
   // delete the old ones before writing new dates so stale invites don't linger.
-  var hadInvites = (status === 'Confirmed' || status === 'Lent Out' || status === 'Added to existing request');
+  var hadInvites = rowInfos.some(function(r) { return r.status === 'Confirmed' || r.status === 'Lent Out' || r.status === 'Added to existing request'; });
   if (hadInvites) {
     try {
-      var cal = CalendarApp.getDefaultCalendar();
+      // Check both calendars — the old invite lives on LIBRARY_CALENDAR_ID
+      // if it was created after that calendar was introduced, or still on
+      // the personal default calendar if this reservation predates it.
+      var cals = [CalendarApp.getCalendarById(LIBRARY_CALENDAR_ID), CalendarApp.getDefaultCalendar()];
       var lib = getLibrary(libraryKey);
-      var firstName = String(data[2]).trim().split(' ')[0];
       var libNameClean = lib.name.replace(/'/g, '');
       if (oldPickupDate) {
         var pStart = new Date(oldPickupDate); pStart.setHours(0, 0, 0, 0);
         var pEnd = new Date(oldPickupDate); pEnd.setHours(23, 59, 59, 999);
-        cal.getEvents(pStart, pEnd, { search: firstName + ' <> ' + libNameClean + ' Pickup' }).forEach(function(ev) { ev.deleteEvent(); });
+        cals.forEach(function(cal) { cal.getEvents(pStart, pEnd, { search: firstName + ' <> ' + libNameClean + ' Pickup' }).forEach(function(ev) { ev.deleteEvent(); }); });
       }
       if (oldReturnDate) {
         var rStart = new Date(oldReturnDate); rStart.setHours(0, 0, 0, 0);
         var rEnd = new Date(oldReturnDate); rEnd.setHours(23, 59, 59, 999);
-        cal.getEvents(rStart, rEnd, { search: firstName + ' <> ' + libNameClean + ' Return' }).forEach(function(ev) { ev.deleteEvent(); });
+        cals.forEach(function(cal) { cal.getEvents(rStart, rEnd, { search: firstName + ' <> ' + libNameClean + ' Return' }).forEach(function(ev) { ev.deleteEvent(); }); });
       }
     } catch (e) { Logger.log('Calendar cleanup failed during revise: ' + e.message); }
   }
 
-  // Write the new values
-  sheet.getRange(row, 9).setValue(newQty);          // I: Qty Requested
-  sheet.getRange(row, 11).setValue(newPickupDate);  // K: Pickup Date
-  sheet.getRange(row, 12).setValue(newPickupTime);  // L: Pickup Time
-  sheet.getRange(row, 13).setValue(newReturnDate);  // M: Return Date
-  sheet.getRange(row, 14).setValue(newReturnTime);  // N: Return Time
-  sheet.getRange(row, 15).setValue(availStatus);    // O: Availability Status
+  // Write the new values for every row in this batch.
+  rowInfos.forEach(function(r) {
+    sheet.getRange(r.row, 9).setValue(r.qty);            // I: Qty Requested
+    sheet.getRange(r.row, 11).setValue(newPickupDate);   // K: Pickup Date
+    sheet.getRange(r.row, 12).setValue(newPickupTime);   // L: Pickup Time
+    sheet.getRange(r.row, 13).setValue(newReturnDate);   // M: Return Date
+    sheet.getRange(r.row, 14).setValue(newReturnTime);   // N: Return Time
+    sheet.getRange(r.row, 15).setValue(r.availStatus);   // O: Availability Status
+  });
 
-  // Recreate calendar invites with the new dates, if they existed before
+  // Recreate exactly one combined calendar invite covering every item in
+  // this batch, if invites existed before.
   if (hadInvites) {
     try {
-      var itemObj = { name: itemName, brand: String(data[6] || '').trim(), size: String(data[9] || '').trim(), qty: newQty };
-      var newRowData = sheet.getRange(row, 1, 1, 17).getValues()[0];
-      sendCalendarInvites(newRowData, [itemObj], libraryKey);
+      var items = rowInfos.map(function(r) {
+        return { name: r.itemName, brand: String(r.data[6] || '').trim(), size: String(r.data[9] || '').trim(), qty: r.qty };
+      });
+      var newRowData = sheet.getRange(rowInfos[0].row, 1, 1, 17).getValues()[0];
+      sendCalendarInvites(newRowData, items, libraryKey);
     } catch (e) {
       return { success: true, warning: 'Reservation updated, but calendar invites failed to regenerate: ' + e.message };
     }

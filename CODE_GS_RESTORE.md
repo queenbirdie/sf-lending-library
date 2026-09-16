@@ -14,7 +14,7 @@ version → Deploy.**
 ```javascript
 // ==========================================
 // SF LENDING LIBRARY — Google Apps Script
-// v2.0 Unified — Last updated: 2026-09-14 10:12 AM PT
+// v2.0 Unified — Last updated: 2026-09-16 2:22 PM PT
 // ==========================================
 
 // ── Tabs ─────────────────────────────────
@@ -26,6 +26,13 @@ const BOOKING_WINDOW_DAYS = 90;
 const BOOKING_LEAD_DAYS   = 2; // earliest a pickup can be booked, in calendar days from today
 const CALENDAR_DAYS       = 60;
 const IMAGES_FOLDER_ID    = '1Zxh_fjMqklzbudaovuHsgPxZx5TK7sCE'; // root (fallback)
+// Dedicated calendar for pickup/return invites, separate from Lauren's
+// personal calendar. Lauren still shows as organizer on every invite (it's
+// her Google account either way) — this only controls which calendar the
+// events live on/can be shown or hidden under "My calendars". Applies going
+// forward only; invites created before this was added stay on the personal
+// calendar and are not migrated.
+const LIBRARY_CALENDAR_ID = '3b84343b41b9620d475ad77ea197b879a346a941f44da458fce3b469ef0bf23d@group.calendar.google.com';
 
 // ── Libraries ────────────────────────────
 // maxLoanDays caps how long an item may be checked out (returnDate - pickupDate),
@@ -1005,7 +1012,7 @@ function sendCalendarInvites(data, items, libraryKey) {
     attendees: [{ email: email }],
     transparency: 'transparent',
     colorId: '3'
-  }, 'primary', { sendUpdates: 'all' });
+  }, LIBRARY_CALENDAR_ID, { sendUpdates: 'all' });
   Calendar.Events.insert({
     summary: firstName + ' <> ' + lib.name + ' Return',
     location: lib.address,
@@ -1015,7 +1022,7 @@ function sendCalendarInvites(data, items, libraryKey) {
     attendees: [{ email: email }],
     transparency: 'transparent',
     colorId: '3'
-  }, 'primary', { sendUpdates: 'all' });
+  }, LIBRARY_CALENDAR_ID, { sendUpdates: 'all' });
 }
 
 function sendPendingInvites() {
@@ -1086,7 +1093,7 @@ function onSheetEdit(e) {
 function auditCalendarInvites() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
   var rows  = sheet.getDataRange().getValues().slice(1);
-  var cal   = CalendarApp.getDefaultCalendar();
+  var cal   = CalendarApp.getCalendarById(LIBRARY_CALENDAR_ID);
   var tz    = Session.getScriptTimeZone();
   var missing = [];
   var seen  = {};
@@ -1182,7 +1189,7 @@ function nightlyAudit() {
   });
 
   // --- Missing calendar invites ---
-  var cal     = CalendarApp.getDefaultCalendar();
+  var cal     = CalendarApp.getCalendarById(LIBRARY_CALENDAR_ID);
   var missing = [];
   var seen2   = {};
   rows.forEach(function(r) {

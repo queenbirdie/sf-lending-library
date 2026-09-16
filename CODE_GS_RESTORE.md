@@ -14,7 +14,7 @@ version → Deploy.**
 ```javascript
 // ==========================================
 // SF LENDING LIBRARY — Google Apps Script
-// v2.0 Unified — Last updated: 2026-09-16 2:22 PM PT
+// v2.0 Unified — Last updated: 2026-09-16 4:09 PM PT
 // ==========================================
 
 // ── Tabs ─────────────────────────────────
@@ -856,6 +856,34 @@ function testReturnReminderEmail() {
   var email = buildReminderEmail('return', 'Maria', lib, deco, returnFmt, '4pm - 6pm', ['Bubble Machine (Little Tikes)', 'Balloon Arch Kit'], careGuidelinesByItem(careItemOrder, careTagsByItem, itemNames.length > 1));
   GmailApp.sendEmail(Session.getEffectiveUser().getEmail(), '[TEST] ' + email.subject, email.text, { htmlBody: email.html });
   Logger.log('Test return reminder sent to ' + Session.getEffectiveUser().getEmail() + ' — care tags found: ' + JSON.stringify(careTagsByItem));
+}
+
+// Isolated test for the LIBRARY_CALENDAR_ID setup — no reservation data
+// involved, just confirms the calendar can be found and written to. Run
+// directly from the editor's function dropdown (this bypasses the web
+// app entirely, so it always runs on the current saved code — no
+// redeploy needed to test with this). Delete the test event it creates
+// from the calendar afterward.
+function testLibraryCalendarInvite() {
+  var cal = CalendarApp.getCalendarById(LIBRARY_CALENDAR_ID);
+  if (!cal) {
+    Logger.log('FAILED: CalendarApp.getCalendarById(LIBRARY_CALENDAR_ID) returned null — either the ID is wrong, or this Google account does not have access to that calendar.');
+    return;
+  }
+  Logger.log('Calendar found via CalendarApp: "' + cal.getName() + '"');
+  try {
+    var start = new Date(Date.now() + 60 * 60 * 1000);
+    var end = new Date(start.getTime() + 30 * 60 * 1000);
+    var event = Calendar.Events.insert({
+      summary: 'TEST — delete me (testLibraryCalendarInvite)',
+      description: 'Created by testLibraryCalendarInvite() to verify LIBRARY_CALENDAR_ID works with the Advanced Calendar Service.',
+      start: { dateTime: start.toISOString(), timeZone: Session.getScriptTimeZone() },
+      end:   { dateTime: end.toISOString(),   timeZone: Session.getScriptTimeZone() }
+    }, LIBRARY_CALENDAR_ID);
+    Logger.log('SUCCESS: event created — ' + event.htmlLink);
+  } catch (e) {
+    Logger.log('FAILED at Calendar.Events.insert: ' + e.message);
+  }
 }
 
 function sendPendingReceipts() {

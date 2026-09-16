@@ -296,26 +296,22 @@ function saveGroupRevise(groupKey, rowsInfo) {
   var btn = document.querySelector('#grouprevise-' + groupKey + ' .admin-btn-confirm');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
 
-  function saveNext(i) {
-    if (i >= rowsInfo.length) { loadAdminData(null, { silent: true }); return; }
-    var r = rowsInfo[i];
-    apiPost({ action: 'adminReviseReservation', passcode: adminPasscode, row: r.row, pickupDate: pickupDate, pickupTime: pickupTime, returnDate: returnDate, returnTime: returnTime, qty: r.qty }, function(result) {
-      if (result.success) {
-        saveNext(i + 1);
-      } else {
-        errEl.textContent = 'Item ' + (i + 1) + ' of ' + rowsInfo.length + ' failed: ' + (result.message || 'Something went wrong.') + ' Earlier items in this request were already saved.';
-        errEl.style.display = 'block';
-        if (btn) { btn.disabled = false; btn.textContent = 'Save changes for all ' + rowsInfo.length; }
-        loadAdminData(null, { silent: true });
-      }
-    }, function() {
-      errEl.textContent = 'Item ' + (i + 1) + ' of ' + rowsInfo.length + ' failed — please try again. Earlier items in this request were already saved.';
+  // One batched call for the whole group — not one call per item — so the
+  // backend can validate every item before writing anything, and regenerate
+  // a single combined calendar invite instead of one per item.
+  apiPost({ action: 'adminReviseReservation', passcode: adminPasscode, rows: rowsInfo, pickupDate: pickupDate, pickupTime: pickupTime, returnDate: returnDate, returnTime: returnTime }, function(result) {
+    if (result.success) {
+      loadAdminData(null, { silent: true });
+    } else {
+      errEl.textContent = result.message || 'Something went wrong.';
       errEl.style.display = 'block';
       if (btn) { btn.disabled = false; btn.textContent = 'Save changes for all ' + rowsInfo.length; }
-      loadAdminData(null, { silent: true });
-    });
-  }
-  saveNext(0);
+    }
+  }, function() {
+    errEl.textContent = 'Something went wrong — please try again.';
+    errEl.style.display = 'block';
+    if (btn) { btn.disabled = false; btn.textContent = 'Save changes for all ' + rowsInfo.length; }
+  });
 }
 
 function bulkButtonsHtml(group, actions, bulkDef) {

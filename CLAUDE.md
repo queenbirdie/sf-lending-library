@@ -152,6 +152,25 @@ boundary does.
 Same caveat as booking lead time: Admin's revise-reservation flow is not
 bound by this.
 
+## Revising a multi-item reservation — one combined calendar invite
+
+A single reservation can span several rows in `reservations` (one row per
+item). `Admin.gs` `adminReviseReservation(formData)` handles both a
+single-item revise (`formData.row`) and a multi-item group revise
+(`formData.rows`: `[{row, qty}, ...]`, all sharing one new pickup/return
+date+time from the group-revise form in `assets/js/admin.js`) — **the
+group case must stay a single batched call**, not the frontend looping
+one `adminReviseReservation` call per row. Every row's availability is
+validated before anything is written (so one conflicting item aborts the
+whole revise instead of partially applying it), then the old combined
+calendar invite is deleted once and exactly one new combined invite is
+recreated from the full, post-revise item list via `sendCalendarInvites()`
+(which already accepts multiple items — this is the same function
+`maybeSendCombinedConfirmation()` uses to send one invite for a
+multi-item request when it's first confirmed). Looping per row instead —
+the original bug — deletes+recreates the invite once per item, leaving
+one separate calendar invite per item rather than a single combined one.
+
 ## Item ID vs Item Name — matching reservations back to inventory
 
 Every reservation row stores an Item Name snapshot (column H) from the

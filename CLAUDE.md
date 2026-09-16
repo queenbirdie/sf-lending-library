@@ -171,6 +171,36 @@ multi-item request when it's first confirmed). Looping per row instead —
 the original bug — deletes+recreates the invite once per item, leaving
 one separate calendar invite per item rather than a single combined one.
 
+## Dedicated calendar for pickup/return invites
+
+Invites go to `LIBRARY_CALENDAR_ID` (`Code.js`) — a secondary calendar in
+Lauren's own Google account, not her personal/default one, so borrower
+invites don't clutter it. Because it's still her account, she remains the
+organizer on every invite exactly as before; the separate calendar only
+means it shows as its own toggleable entry under "My calendars" that she
+can show/hide independently. Applies **going forward only** — invites
+created before this was added are not migrated and stay on the personal
+calendar, since moving an event with an attendee can re-send them a
+notification email and confuse borrowers about a reservation that hasn't
+actually changed. Three places reference it:
+- `sendCalendarInvites()` — creates new invites on `LIBRARY_CALENDAR_ID`
+  (previously hardcoded to `'primary'`).
+- `auditCalendarInvites()` / `nightlyAudit()`'s missing-invite check —
+  look for existing invites on `LIBRARY_CALENDAR_ID`. Note: a reservation
+  confirmed *before* this change has its invite on the personal calendar,
+  not this one, so these audits will flag it as "missing" until it's
+  returned/completed — a known, temporary side effect of not migrating
+  old invites, not a bug.
+- `Admin.gs` `adminReviseReservation()`'s old-invite cleanup — checks
+  **both** `LIBRARY_CALENDAR_ID` and the personal default calendar when
+  deleting the old invite before recreating it, since a revised
+  reservation might predate the calendar split.
+
+`findOldTitleInvites()` (a one-off legacy migration helper, unrelated to
+this) is intentionally untouched — it still searches the personal
+calendar, since it's looking for old-format-titled events that predate
+even the current naming convention and were never affected by this.
+
 ## Item ID vs Item Name — matching reservations back to inventory
 
 Every reservation row stores an Item Name snapshot (column H) from the

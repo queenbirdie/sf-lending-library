@@ -353,18 +353,21 @@ function adminReviseReservation(formData) {
   var hadInvites = rowInfos.some(function(r) { return r.status === 'Confirmed' || r.status === 'Lent Out' || r.status === 'Added to existing request'; });
   if (hadInvites) {
     try {
-      var cal = CalendarApp.getDefaultCalendar();
+      // Check both calendars — the old invite lives on LIBRARY_CALENDAR_ID
+      // if it was created after that calendar was introduced, or still on
+      // the personal default calendar if this reservation predates it.
+      var cals = [CalendarApp.getCalendarById(LIBRARY_CALENDAR_ID), CalendarApp.getDefaultCalendar()];
       var lib = getLibrary(libraryKey);
       var libNameClean = lib.name.replace(/'/g, '');
       if (oldPickupDate) {
         var pStart = new Date(oldPickupDate); pStart.setHours(0, 0, 0, 0);
         var pEnd = new Date(oldPickupDate); pEnd.setHours(23, 59, 59, 999);
-        cal.getEvents(pStart, pEnd, { search: firstName + ' <> ' + libNameClean + ' Pickup' }).forEach(function(ev) { ev.deleteEvent(); });
+        cals.forEach(function(cal) { cal.getEvents(pStart, pEnd, { search: firstName + ' <> ' + libNameClean + ' Pickup' }).forEach(function(ev) { ev.deleteEvent(); }); });
       }
       if (oldReturnDate) {
         var rStart = new Date(oldReturnDate); rStart.setHours(0, 0, 0, 0);
         var rEnd = new Date(oldReturnDate); rEnd.setHours(23, 59, 59, 999);
-        cal.getEvents(rStart, rEnd, { search: firstName + ' <> ' + libNameClean + ' Return' }).forEach(function(ev) { ev.deleteEvent(); });
+        cals.forEach(function(cal) { cal.getEvents(rStart, rEnd, { search: firstName + ' <> ' + libNameClean + ' Return' }).forEach(function(ev) { ev.deleteEvent(); }); });
       }
     } catch (e) { Logger.log('Calendar cleanup failed during revise: ' + e.message); }
   }

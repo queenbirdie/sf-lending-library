@@ -27,7 +27,19 @@ actions, etc.) means:
 2. **Always syntax-check before committing** — extract the code block and
    run `node --check` on it. This has caught real mistakes; don't skip it.
 3. Tell the user to: open the Apps Script editor → `Code.js` → select all →
-   delete → paste the updated block → save.
+   delete → paste the updated block → save, **then redeploy**: Deploy →
+   Manage deployments → pencil icon on the existing deployment → Version:
+   New version → Deploy. Saving the script does **not** update what the
+   live web app actually runs — a deployment stays pinned to whatever
+   version was active when it was last deployed, so skipping this step
+   leaves old behavior running indefinitely with no error, even though
+   the editor shows the new code. (This bit a real change: the referral
+   source field was pasted in and confirmed present in the editor, but
+   went un-deployed for a while — submissions kept succeeding with the
+   field silently ignored, no validation error, nothing written to its
+   column — because the live web app was still running the pre-change
+   version. Always call out the redeploy step explicitly, don't assume
+   "save" was enough.)
 4. For anything that needs verifying, point them at the relevant
    `test*()` function (see below) rather than assuming it works.
 

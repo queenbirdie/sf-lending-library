@@ -183,6 +183,22 @@ multi-item request when it's first confirmed). Looping per row instead —
 the original bug — deletes+recreates the invite once per item, leaving
 one separate calendar invite per item rather than a single combined one.
 
+**The single-item revise path also auto-discovers siblings.** The admin
+dashboard still shows a per-item "Revise" button on every item even inside
+a multi-item group (alongside the group's "Revise all") — that button
+calls `adminReviseReservation` with just `formData.row`, no `formData.rows`.
+Since a reservation always has one shared date+time and one combined
+invite, `adminReviseReservation` checks whether that lone row has siblings
+(same library + email + current pickup/return dates + original submission
+timestamp — the same grouping key `maybeSendCombinedConfirmation()` uses)
+and folds them into the batch automatically, keeping each sibling's
+existing qty untouched and only applying the requested qty change to the
+row actually being revised. Without this, using the per-item button on a
+grouped reservation would silently regenerate the combined invite with
+just that one item, dropping the others off the borrower's calendar — the
+same failure mode the batching fix above addresses, just reachable through
+a different button.
+
 ## Dedicated calendar for pickup/return invites
 
 Invites go to `LIBRARY_CALENDAR_ID` (`Code.js`) — a secondary calendar in

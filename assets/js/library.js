@@ -152,6 +152,21 @@ function onDatesChange() {
     updateCart();
     showRemovalAlert(removedItems);
   }
+  // A date change can shrink an item's availableQty without making it fully
+  // unavailable (still >0, just less than before) — clamp any cart quantity
+  // that's now too high, otherwise the qty dropdown silently renders a
+  // different number than what's actually selected and submitted.
+  var byName = {};
+  filtered.forEach(function(i) { byName[i.name] = i; });
+  var clamped = false;
+  Object.keys(cart).forEach(function(n) {
+    var item = byName[n];
+    if (item && item.available && cart[n] > item.availableQty) {
+      cart[n] = item.availableQty;
+      clamped = true;
+    }
+  });
+  if (clamped) updateCart();
   sumEl.innerHTML = '<strong>' + count + ' item' + (count !== 1 ? 's' : '') + '</strong> available ' + fmtDate(pickup) + '&#8211;' + fmtDate(ret);
   sumEl.style.display = 'block';
   currentItems = filtered; currentDatesKnown = true; applyFilters();

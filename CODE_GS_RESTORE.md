@@ -14,7 +14,7 @@ version → Deploy.**
 ```javascript
 // ==========================================
 // SF LENDING LIBRARY — Google Apps Script
-// v2.0 Unified — Last updated: 2026-09-16 4:09 PM PT
+// v2.0 Unified — Last updated: 2026-09-16 10:00 PM PT
 // ==========================================
 
 // ── Tabs ─────────────────────────────────
@@ -90,11 +90,8 @@ const COL_CARE_TAGS      = 11; // L — optional, comma-separated (see CARE_GUID
 // A=Library, B=Timestamp, C=Name, D=Email, E=Phone, F=Item ID, G=Brand, H=Item Name,
 // I=Qty Requested, J=Size, K=Pickup Date, L=Pickup Time, M=Return Date, N=Return Time,
 // O=Availability Status, P=Status, Q=Notes,
-// R=Actual Return Date, S=# Days Returned Late
-const RSVP_ITEM_ID_COL = 6;  // F
-const RSVP_BRAND_COL   = 7;  // G
+// R=Actual Return Date, S=# Days Returned Late, T=Referral Source
 const RSVP_QTY_COL     = 9;  // I (right after Item Name)
-const RSVP_SIZE_COL    = 10; // J
 const RSVP_STATUS_COL  = 16; // P
 const RSVP_LIBRARY_COL = 1;  // A
 

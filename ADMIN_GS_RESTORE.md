@@ -317,6 +317,40 @@ function adminReviseReservation(formData) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var invRows = ss.getSheetByName(INV_TAB).getDataRange().getValues();
   var allRsvpRows = sheet.getDataRange().getValues().slice(1);
+
+  // A single row (the per-item revise form, formData.row) might actually be
+  // part of a multi-item reservation. A reservation always has one shared
+  // pickup/return date+time and one combined calendar invite, so revising
+  // just this row's dates without its siblings would silently orphan them
+  // from both the sheet's date columns and the invite (the invite would get
+  // recreated with only this one item). Auto-discover siblings the same way
+  // maybeSendCombinedConfirmation() does — same library + email + current
+  // pickup/return dates + original submission timestamp — and fold them
+  // into the batch, keeping each sibling's own existing qty untouched.
+  if (!Array.isArray(formData.rows) && entries.length === 1) {
+    var soleRow = entries[0].row;
+    var soleData = sheet.getRange(soleRow, 1, 1, 19).getValues()[0];
+    var tz = Session.getScriptTimeZone();
+    var soleEmail = String(soleData[3]).trim();
+    var soleLib = String(soleData[0]).trim();
+    var solePickupFmt = soleData[10] instanceof Date ? Utilities.formatDate(soleData[10], tz, 'yyyy-MM-dd') : String(soleData[10]);
+    var soleReturnFmt = soleData[12] instanceof Date ? Utilities.formatDate(soleData[12], tz, 'yyyy-MM-dd') : String(soleData[12]);
+    var soleTsFmt = soleData[1] instanceof Date ? Utilities.formatDate(soleData[1], tz, 'yyyy-MM-dd HH:mm:ss') : String(soleData[1]);
+    for (var s = 0; s < allRsvpRows.length; s++) {
+      var siblingRowNum = s + 2;
+      if (siblingRowNum === soleRow) continue;
+      var sr = allRsvpRows[s];
+      if (String(sr[0]).trim() !== soleLib || String(sr[3]).trim() !== soleEmail) continue;
+      var sPickupFmt = sr[10] instanceof Date ? Utilities.formatDate(sr[10], tz, 'yyyy-MM-dd') : String(sr[10]);
+      var sReturnFmt = sr[12] instanceof Date ? Utilities.formatDate(sr[12], tz, 'yyyy-MM-dd') : String(sr[12]);
+      var sTsFmt = sr[1] instanceof Date ? Utilities.formatDate(sr[1], tz, 'yyyy-MM-dd HH:mm:ss') : String(sr[1]);
+      if (sPickupFmt === solePickupFmt && sReturnFmt === soleReturnFmt && sTsFmt === soleTsFmt) {
+        var siblingQty = (sr[8] && !isNaN(parseInt(sr[8]))) ? parseInt(sr[8]) : 1;
+        entries.push({ row: siblingRowNum, qty: siblingQty });
+      }
+    }
+  }
+
   var reviseRowNums = entries.map(function(e) { return e.row; });
 
   // Validate every row in this batch (against every OTHER row — i.e. every

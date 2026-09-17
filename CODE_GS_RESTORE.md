@@ -14,7 +14,7 @@ version → Deploy.**
 ```javascript
 // ==========================================
 // SF LENDING LIBRARY — Google Apps Script
-// v2.0 Unified — Last updated: 2026-09-16 10:00 PM PT
+// v2.0 Unified — Last updated: 2026-09-17 9:52 AM PT
 // ==========================================
 
 // ── Tabs ─────────────────────────────────
@@ -975,6 +975,19 @@ function maybeSendCombinedConfirmation(row) {
   }
 }
 
+// Looks for a pickup/return invite by title, checking LIBRARY_CALENDAR_ID
+// first and falling back to the personal default calendar — a reservation
+// confirmed before LIBRARY_CALENDAR_ID existed still has its invite on the
+// personal calendar, so checking only the dedicated calendar would flag
+// every one of those as "missing" until it completes. Used by the
+// missing-invite audits (auditCalendarInvites(), nightlyAudit()).
+function findInviteEvents(firstName, libNameClean, dayStart, dayEnd, kind) {
+  var search = firstName + ' <> ' + libNameClean + ' ' + kind;
+  var events = CalendarApp.getCalendarById(LIBRARY_CALENDAR_ID).getEvents(dayStart, dayEnd, { search: search });
+  if (events.length) return events;
+  return CalendarApp.getDefaultCalendar().getEvents(dayStart, dayEnd, { search: search });
+}
+
 function sendCalendarInvites(data, items, libraryKey) {
   var lib        = getLibrary(libraryKey);
   var name       = data[2];
@@ -1118,7 +1131,6 @@ function onSheetEdit(e) {
 function auditCalendarInvites() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
   var rows  = sheet.getDataRange().getValues().slice(1);
-  var cal   = CalendarApp.getCalendarById(LIBRARY_CALENDAR_ID);
   var tz    = Session.getScriptTimeZone();
   var missing = [];
   var seen  = {};
@@ -1143,8 +1155,8 @@ function auditCalendarInvites() {
     var rDayEnd   = new Date(returnDate); rDayEnd.setHours(23,59,59,999);
     var lib2 = getLibrary(libraryKey);
     var libNameClean = lib2.name.replace(/'/g, '');
-    var pickupEvents = cal.getEvents(pDayStart, pDayEnd, { search: firstName + ' <> ' + libNameClean + ' Pickup' });
-    var returnEvents = cal.getEvents(rDayStart, rDayEnd, { search: firstName + ' <> ' + libNameClean + ' Return' });
+    var pickupEvents = findInviteEvents(firstName, libNameClean, pDayStart, pDayEnd, 'Pickup');
+    var returnEvents = findInviteEvents(firstName, libNameClean, rDayStart, rDayEnd, 'Return');
     if (!pickupEvents.length || !returnEvents.length) {
       var issues = [];
       if (!pickupEvents.length) issues.push('missing pickup invite (' + Utilities.formatDate(pickupDate, tz, 'MMM d') + ')');
@@ -1214,7 +1226,6 @@ function nightlyAudit() {
   });
 
   // --- Missing calendar invites ---
-  var cal     = CalendarApp.getCalendarById(LIBRARY_CALENDAR_ID);
   var missing = [];
   var seen2   = {};
   rows.forEach(function(r) {
@@ -1235,8 +1246,8 @@ function nightlyAudit() {
     var rDayStart = new Date(returnDate); rDayStart.setHours(0,0,0,0);
     var rDayEnd   = new Date(returnDate); rDayEnd.setHours(23,59,59,999);
     var libNameClean = lib.name.replace(/'/g, '');
-    var pickupEvents = cal.getEvents(pDayStart, pDayEnd, { search: firstName + ' <> ' + libNameClean + ' Pickup' });
-    var returnEvents = cal.getEvents(rDayStart, rDayEnd, { search: firstName + ' <> ' + libNameClean + ' Return' });
+    var pickupEvents = findInviteEvents(firstName, libNameClean, pDayStart, pDayEnd, 'Pickup');
+    var returnEvents = findInviteEvents(firstName, libNameClean, rDayStart, rDayEnd, 'Return');
     if (!pickupEvents.length || !returnEvents.length) {
       var issues = [];
       if (!pickupEvents.length) issues.push('missing pickup invite (' + Utilities.formatDate(pickupDate, tz, 'MMM d') + ')');

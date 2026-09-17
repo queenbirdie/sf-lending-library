@@ -214,15 +214,19 @@ actually changed. Three places reference it:
 - `sendCalendarInvites()` — creates new invites on `LIBRARY_CALENDAR_ID`
   (previously hardcoded to `'primary'`).
 - `auditCalendarInvites()` / `nightlyAudit()`'s missing-invite check —
-  look for existing invites on `LIBRARY_CALENDAR_ID`. Note: a reservation
-  confirmed *before* this change has its invite on the personal calendar,
-  not this one, so these audits will flag it as "missing" until it's
-  returned/completed — a known, temporary side effect of not migrating
-  old invites, not a bug.
+  both use the shared `findInviteEvents(firstName, libNameClean, dayStart,
+  dayEnd, kind)` helper, which checks `LIBRARY_CALENDAR_ID` first and
+  falls back to the personal default calendar. This isn't optional: a
+  reservation confirmed *before* the calendar split still has its invite
+  on the personal calendar, so checking only `LIBRARY_CALENDAR_ID` would
+  flag every one of those as "missing" every night until it completes —
+  the two-calendar check is what avoids that false positive.
 - `Admin.gs` `adminReviseReservation()`'s old-invite cleanup — checks
   **both** `LIBRARY_CALENDAR_ID` and the personal default calendar when
   deleting the old invite before recreating it, since a revised
-  reservation might predate the calendar split.
+  reservation might predate the calendar split. (Same two-calendar
+  principle as `findInviteEvents()` above, just for deletion instead of
+  existence-checking, and it lives in `Admin.gs` rather than `Code.js`.)
 
 `findOldTitleInvites()` (a one-off legacy migration helper, unrelated to
 this) is intentionally untouched — it still searches the personal

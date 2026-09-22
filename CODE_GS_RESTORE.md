@@ -14,7 +14,7 @@ version → Deploy.**
 ```javascript
 // ==========================================
 // SF LENDING LIBRARY — Google Apps Script
-// v2.0 Unified — Last updated: 2026-09-17 9:52 AM PT
+// v2.0 Unified — Last updated: 2026-09-21 9:35 PM PDT
 // ==========================================
 
 // ── Tabs ─────────────────────────────────
@@ -588,6 +588,19 @@ function isNestingExpectedSet(itemIds) {
   });
 }
 
+// Libraries where the "keep them separate" note never makes sense on a
+// multi-item return, regardless of which items — e.g. Yoto cards are small
+// and thin enough that "nothing tucked inside something else" isn't
+// relevant guidance. Library-wide, unlike NESTING_EXPECTED_ITEM_SETS above
+// which is scoped to one specific item pairing. Add a library key here to
+// introduce another such exception, and log it in REMINDER_EMAILS_SETUP.md's
+// rules log.
+var MULTI_ITEM_NOTE_SUPPRESSED_LIBRARIES = ['yoto'];
+
+function shouldSuppressMultiItemNote(libraryKey, itemIds) {
+  return isNestingExpectedSet(itemIds) || MULTI_ITEM_NOTE_SUPPRESSED_LIBRARIES.indexOf(libraryKey) !== -1;
+}
+
 // Resolves collected tags to guideline text, grouped by item rather than
 // by tag — all of the first item's guidelines, then the second's, and so
 // on — so a multi-item return reads as "here's what to do for item A,
@@ -807,7 +820,7 @@ function sendReturnReminders() {
     var deco = REMINDER_DECOR[g.library] || REMINDER_DECOR['kid-gear'];
     var firstName = g.name.split(' ')[0];
     var careItems = careGuidelinesByItem(g.careItemOrder, g.careTagsByItem, g.items.length > 1);
-    var suppressMultiItemNote = isNestingExpectedSet(g.itemIds);
+    var suppressMultiItemNote = shouldSuppressMultiItemNote(g.library, g.itemIds);
     var email = buildReminderEmail('return', firstName, lib, deco, returnFmt, g.time, g.items, careItems, suppressMultiItemNote);
     GmailApp.sendEmail(g.email, email.subject, email.text, { htmlBody: email.html, bcc: Session.getEffectiveUser().getEmail() });
     props.setProperty(sentKey, 'sent');

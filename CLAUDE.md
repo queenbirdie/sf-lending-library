@@ -80,14 +80,16 @@ read via `getItemCareTags()`. Current tags, defined in `CARE_GUIDELINES`:
 that apply to what's actually being returned show up — untagged items add
 nothing. A separate, non-tag `multiItemNote` bullet shows automatically
 whenever a return covers more than one item ("keep them separate, nothing
-tucked inside something else") — unless the return is exactly one of the
-item-ID sets in `NESTING_EXPECTED_ITEM_SETS` (e.g. `KG-101` + `KG-162`,
-car seat + carrier, where the car seat is meant to sit inside the
-carrier), in which case the note is suppressed since nesting is correct
-for that pairing. No "leave it as good as you found it" closing line
-anymore — removed per Lauren's request. Full tag table, tagging
-conventions, and the running log of these rules/exceptions:
-`REMINDER_EMAILS_SETUP.md`.
+tucked inside something else") — suppressed in two cases: when the return
+is exactly one of the item-ID sets in `NESTING_EXPECTED_ITEM_SETS` (e.g.
+`KG-101` + `KG-162`, car seat + carrier, where the car seat is meant to
+sit inside the carrier — nesting is correct for that pairing), or when
+the library is listed in `MULTI_ITEM_NOTE_SUPPRESSED_LIBRARIES` (Yoto —
+its cards are small/thin enough that the note isn't relevant guidance
+regardless of which ones are mixed together). No "leave it as good as
+you found it" closing line anymore — removed per Lauren's request. Full
+tag table, tagging conventions, and the running log of these
+rules/exceptions: `REMINDER_EMAILS_SETUP.md`.
 
 `careGuidelinesByItem()` attributes each guideline to the item it came
 from ("(Item Name)") on multi-item returns — but only when that guideline

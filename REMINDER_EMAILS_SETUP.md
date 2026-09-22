@@ -212,6 +212,7 @@ already do this?" instead of re-reading `Code.js`.
 |---|---|---|---|
 | (earlier, undated) | "Keep them separate, nothing tucked inside something else" note added automatically to any return covering more than one item, **unless a more specific exception below says otherwise** | General reminder — easy to miss an item tucked inside another when putting things away | `multiItemNote` inside `buildReminderEmail()` |
 | 2026-09 | ↳ Exception: the note above is suppressed when a return is *exactly* Kid & Travel Gear's car seat (`KG-101`) + carrier (`KG-162`), nothing else mixed in | The car seat is meant to sit inside the carrier — nesting them is the correct way to return this pair, not something to warn against | `NESTING_EXPECTED_ITEM_SETS` + `isNestingExpectedSet()`, used in `sendReturnReminders()` and `buildReminderEmail()`'s `suppressMultiItemNote` param |
+| 2026-09 | ↳ Exception: the note above is suppressed for **any** multi-item return from the Yoto Lending Library, regardless of which cards | Yoto cards are small/thin — "nothing tucked inside something else" isn't relevant guidance for them, unlike bulkier gear | `MULTI_ITEM_NOTE_SUPPRESSED_LIBRARIES` + `shouldSuppressMultiItemNote()`, used in `sendReturnReminders()` and `buildReminderEmail()`'s `suppressMultiItemNote` param |
 | (earlier, undated) | A guideline shared by more than one item in the same return collapses to one unattributed bullet instead of repeating per item | Attribution wouldn't disambiguate anything once the same guideline applies to more than one item (e.g. several Yoto cards all tagged `spot-clean`) | `careGuidelinesByItem()` |
 | (earlier, undated) | Removed the "leave it as good as you found it" closing line | No longer wanted | (removed; no longer in code) |
 
@@ -221,6 +222,8 @@ you don't read the general rule in isolation and miss that it's
 qualified. To add another item-set exception like the car seat/carrier
 one: add another array to `NESTING_EXPECTED_ITEM_SETS` (e.g. `['XX-1',
 'XX-2']`), then add a row directly under the multi-item note rule above.
+To add another whole-library exception like Yoto's: add the library key
+to `MULTI_ITEM_NOTE_SUPPRESSED_LIBRARIES`, then add a row the same way.
 
 **To check it's working:** run `testReturnReminderEmail()` (see "Preview it
 for real" above). It looks up real Care Tags for the sample item names set

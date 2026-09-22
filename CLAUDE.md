@@ -199,6 +199,18 @@ just that one item, dropping the others off the borrower's calendar — the
 same failure mode the batching fix above addresses, just reachable through
 a different button.
 
+**Revising also has to mark its own dedup key, not just send the invite.**
+`sendPendingInvites()` (a periodic catch-all trigger — see
+`REMINDER_EMAILS_SETUP.md`) and `maybeSendCombinedConfirmation()` both
+dedup on a Script Properties key that includes the pickup/return dates
+themselves (`'sent_' + libraryKey + '_' + email + '_' + pickupFmt + '_' +
+returnFmt + '_' + tsFmt`). Since `adminReviseReservation()` changes those
+dates, the *new* dates always produce a key that's never been marked sent
+— so after it sends the recreated invite directly, it also sets that same
+key itself; otherwise `sendPendingInvites()`'s next run (every few
+minutes) would see an apparently-unsent reservation and fire a second,
+duplicate pickup+return invite on top of the one revise already sent.
+
 ## Dedicated calendar for pickup/return invites
 
 Invites go to `LIBRARY_CALENDAR_ID` (`Code.js`) — a secondary calendar in

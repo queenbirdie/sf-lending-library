@@ -317,6 +317,7 @@ function adminReviseReservation(formData) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var invRows = ss.getSheetByName(INV_TAB).getDataRange().getValues();
   var allRsvpRows = sheet.getDataRange().getValues().slice(1);
+  var tz = Session.getScriptTimeZone();
 
   // A single row (the per-item revise form, formData.row) might actually be
   // part of a multi-item reservation. A reservation always has one shared
@@ -330,7 +331,6 @@ function adminReviseReservation(formData) {
   if (!Array.isArray(formData.rows) && entries.length === 1) {
     var soleRow = entries[0].row;
     var soleData = sheet.getRange(soleRow, 1, 1, 19).getValues()[0];
-    var tz = Session.getScriptTimeZone();
     var soleEmail = String(soleData[3]).trim();
     var soleLib = String(soleData[0]).trim();
     var solePickupFmt = soleData[10] instanceof Date ? Utilities.formatDate(soleData[10], tz, 'yyyy-MM-dd') : String(soleData[10]);
@@ -425,6 +425,18 @@ function adminReviseReservation(formData) {
       });
       var newRowData = sheet.getRange(rowInfos[0].row, 1, 1, 17).getValues()[0];
       sendCalendarInvites(newRowData, items, libraryKey);
+      // sendPendingInvites() (a periodic catch-all trigger) and
+      // maybeSendCombinedConfirmation() dedup on a key that includes the
+      // pickup/return dates themselves — changing those dates here means
+      // that catch-all would otherwise see a brand new, never-marked key
+      // on its next run and send a second, duplicate invite on top of the
+      // one just sent above. Mark the new key as already sent so it skips.
+      var email = String(rowInfos[0].data[3]).trim();
+      var tsFmt = rowInfos[0].data[1] instanceof Date ? Utilities.formatDate(rowInfos[0].data[1], tz, 'yyyy-MM-dd HH:mm:ss') : String(rowInfos[0].data[1]);
+      var newPickupFmt = Utilities.formatDate(newPickupDate, tz, 'yyyy-MM-dd');
+      var newReturnFmt = Utilities.formatDate(newReturnDate, tz, 'yyyy-MM-dd');
+      var sentKey = 'sent_' + libraryKey + '_' + email.replace(/[^a-z0-9]/gi, '_') + '_' + newPickupFmt + '_' + newReturnFmt + '_' + tsFmt.replace(/[^0-9]/g, '');
+      PropertiesService.getScriptProperties().setProperty(sentKey, 'true');
     } catch (e) {
       return { success: true, warning: 'Reservation updated, but calendar invites failed to regenerate: ' + e.message };
     }

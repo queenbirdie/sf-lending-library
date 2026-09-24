@@ -46,6 +46,40 @@ actions, etc.) means:
 `Admin.gs` has the same pattern via `ADMIN_GS_RESTORE.md` /
 `APPS_SCRIPT_ADMIN_SETUP.md`.
 
+## Bare Apps Script URL — `doGet()`'s legacy fallback
+
+Hitting the deployed `/exec` URL directly (no `?action=` param — e.g. an
+old bookmark or shared link from before the Hugo site existed) used to
+fall through to `HtmlService.createHtmlOutputFromFile('availability')` —
+an entire second copy of the request form, but as a standalone `.html`
+file that lives *only* inside the Apps Script project itself. Unlike
+`Code.js`/`Admin.gs`, that file was never mirrored anywhere in this repo
+(no `*_RESTORE.md` for it), so nothing here could have ever caught it
+drifting out of sync — it just silently kept running whatever it looked
+like the day it was written.
+
+This caused real, hard-to-diagnose reports (2026-09-24): people submitting
+via that stale page got "Please tell us how you heard about us." on
+submit with no such field ever shown to fill in. Not a caching bug on the
+real site — the browser was genuinely on `script.google.com/macros/s/{id}/
+exec`, not `sflendinglibrary.org`. The old page never sent a
+`referralSource` field, but it calls the *same*, definitely-current
+`submitReservation()`, whose server-side validation now rejects a blank
+one with exactly that message — so the old page's generic error display
+just surfaced the backend's rejection for a field it doesn't know exists.
+Any future frontend-only addition to the real site (a new required field,
+a copy change, etc.) would silently reproduce this same failure mode for
+anyone still landing on that bare URL, since that page can never be
+updated from here.
+
+Fixed by having `doGet()`'s fallback branch redirect to
+`https://sflendinglibrary.org/` (or `/{key}/` when `e.parameter.lib` is a
+known library key) instead of serving that file at all — so a stray old
+link now bounces to the real, current site rather than a relic that can
+only fall further out of date. The old `availability.html` file itself is
+harmless dead weight once nothing references it — safe for Lauren to
+delete from the Apps Script project's file list, but not required.
+
 **Never preview HTML email changes via a Gmail draft.** Gmail's
 compose/draft editor is a rich-text editor that silently strips
 backgrounds, borders, letter-spacing, `position`, and other CSS — a draft

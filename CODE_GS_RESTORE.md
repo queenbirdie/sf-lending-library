@@ -14,7 +14,7 @@ version → Deploy.**
 ```javascript
 // ==========================================
 // SF LENDING LIBRARY — Google Apps Script
-// v2.0 Unified — Last updated: 2026-09-21 9:35 PM PDT
+// v2.0 Unified — Last updated: 2026-09-24 2:46 PM PDT
 // ==========================================
 
 // ── Tabs ─────────────────────────────────
@@ -1494,8 +1494,23 @@ function doGet(e) {
       .setMimeType(ContentService.MimeType.JSON);
   }
 
-  // Legacy fallback: serve the HTML page directly from Apps Script
-  return HtmlService.createHtmlOutputFromFile('availability')
+  // Some visitors still land on this bare Apps Script URL directly (old
+  // bookmarks/links from before the Hugo site existed) instead of
+  // sflendinglibrary.org. This used to fall back to an 'availability' HTML
+  // file baked into the Apps Script project itself — a second copy of the
+  // request form that lives outside this repo entirely, so it never got
+  // any frontend update made here (the referral-source field included):
+  // visitors saw that stale form, then got rejected by this same file's
+  // now-current submitReservation() for a field they were never shown.
+  // Redirect to the real site instead of serving that relic.
+  var redirectUrl = 'https://sflendinglibrary.org/';
+  var libKey = e && e.parameter && e.parameter.lib;
+  if (libKey && isKnownLibrary(libKey)) redirectUrl += libKey + '/';
+  var redirectHtml = '<!DOCTYPE html><html><head><meta charset="utf-8">' +
+    '<meta http-equiv="refresh" content="0; url=' + redirectUrl + '">' +
+    '<script>location.replace(' + JSON.stringify(redirectUrl) + ');</script>' +
+    '</head><body>Redirecting to <a href="' + redirectUrl + '">' + redirectUrl + '</a>&hellip;</body></html>';
+  return HtmlService.createHtmlOutput(redirectHtml)
     .setTitle('SF Lending Library')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }

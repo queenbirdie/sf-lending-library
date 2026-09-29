@@ -247,6 +247,33 @@ key itself; otherwise `sendPendingInvites()`'s next run (every few
 minutes) would see an apparently-unsent reservation and fire a second,
 duplicate pickup+return invite on top of the one revise already sent.
 
+**Every admin dashboard section groups multi-item reservations into one
+card, with per-section bulk actions.** `Admin.gs` `getAdminData()` tags
+every row with a `groupKey` (the original submission timestamp — shared
+by every item of one request, unique across different requests), and
+`assets/js/admin.js`'s `renderGroupedSection()` uses it to fold same-
+request rows into a single card (`groupItems()`), showing a "N items ·
+same request" label plus bulk buttons: a primary one from `bulkDef`
+(`"Mark all returned"`, `"Mark all lent out"`, `"Confirm all"` — calls
+`adminBatchUpdateStatus`, which is already status-agnostic and works on
+any rows list) and, when `actions` includes `'revise'`/`'cancel'`/
+`'decline'`, a secondary `"Revise all"`/`"Cancel all"`/`"Decline all"`.
+**All eight sections use this** (`renderSection()`, the old ungrouped
+per-row renderer, was removed once the last four sections — Tomorrow's
+returns, Checked out, Overdue pickups, Overdue — were switched over to
+match); before that, those four rendered each item in a multi-item
+reservation as a fully separate card with no way to act on the whole
+request at once — reported 2026-09-29 as a multi-item Yoto return (3
+cards, one request) with no "mark all returned" option in "Tomorrow's
+returns." No backend change was needed — `groupKey` and
+`adminBatchUpdateStatus` already existed and worked identically for
+every section; it was purely that four call sites had never been wired
+up to the grouped renderer. `renderGroupedSection()` takes a `showLate`
+param (threaded through to `metaHtml()`) so the "N days late" line still
+shows on the Overdue/Overdue-pickups sections once grouped — that's the
+one thing the old `renderSection()` did that a naive copy-paste of the
+other sections' calls would have silently dropped.
+
 ## Dedicated calendar for pickup/return invites
 
 Invites go to `LIBRARY_CALENDAR_ID` (`Code.js`) — a secondary calendar in

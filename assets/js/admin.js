@@ -51,14 +51,14 @@ function loadAdminData(cb, opts) {
     var ok = data && Array.isArray(data.pending);
     if (!ok) { if (cb) cb(false, data && (data.error || data.message)); return; }
     document.getElementById('adminContent').style.display = 'block';
-    renderGroupedSection('pendingList', 'pendingCount', data.pending, ['confirm', 'decline', 'revise'], { label: 'Confirm all', status: 'Confirmed', hoistMeta: true });
-    renderGroupedSection('todayReturnsList', 'todayReturnsCount', sortByDateTime(data.todayReturns || [], 'returnDateISO', 'returnTime'), ['markReturned', 'lostDamaged', 'revise'], { label: 'Mark all returned', status: 'Returned', hoistMeta: false }, 'return');
-    renderGroupedSection('upcomingList', 'upcomingCount', sortByDateTime(data.upcoming || [], 'pickupDateISO', 'pickupTime'), ['markLentOut', 'revise', 'cancel'], { label: 'Mark all lent out', status: 'Lent Out', hoistMeta: false }, 'pickup');
-    renderGroupedSection('pickupsList', 'pickupsCount', sortByDateTime(data.tomorrowPickups || [], 'pickupDateISO', 'pickupTime'), ['markLentOut', 'revise', 'cancel'], { label: 'Mark all lent out', status: 'Lent Out', hoistMeta: false }, 'pickup');
-    renderSection('returnsList', 'returnsCount', sortByDateTime(data.tomorrowReturns || [], 'returnDateISO', 'returnTime'), ['markReturned', 'revise'], false, 'return');
-    renderSection('checkedOutList', 'checkedOutCount', sortByDateTime(data.checkedOut || [], 'returnDateISO', 'returnTime'), ['markReturned', 'lostDamaged', 'revise'], false, 'return');
-    renderSection('overduePickupsList', 'overduePickupsCount', data.overduePickups || [], ['markLentOut', 'revise', 'cancel'], true, 'pickup');
-    renderSection('overdueList', 'overdueCount', data.overdue || [], ['markReturned', 'revise'], true, 'return');
+    renderGroupedSection('pendingList', 'pendingCount', data.pending, ['confirm', 'decline', 'revise'], { label: 'Confirm all', status: 'Confirmed', hoistMeta: true }, false);
+    renderGroupedSection('todayReturnsList', 'todayReturnsCount', sortByDateTime(data.todayReturns || [], 'returnDateISO', 'returnTime'), ['markReturned', 'lostDamaged', 'revise'], { label: 'Mark all returned', status: 'Returned', hoistMeta: false }, false, 'return');
+    renderGroupedSection('upcomingList', 'upcomingCount', sortByDateTime(data.upcoming || [], 'pickupDateISO', 'pickupTime'), ['markLentOut', 'revise', 'cancel'], { label: 'Mark all lent out', status: 'Lent Out', hoistMeta: false }, false, 'pickup');
+    renderGroupedSection('pickupsList', 'pickupsCount', sortByDateTime(data.tomorrowPickups || [], 'pickupDateISO', 'pickupTime'), ['markLentOut', 'revise', 'cancel'], { label: 'Mark all lent out', status: 'Lent Out', hoistMeta: false }, false, 'pickup');
+    renderGroupedSection('returnsList', 'returnsCount', sortByDateTime(data.tomorrowReturns || [], 'returnDateISO', 'returnTime'), ['markReturned', 'revise'], { label: 'Mark all returned', status: 'Returned', hoistMeta: false }, false, 'return');
+    renderGroupedSection('checkedOutList', 'checkedOutCount', sortByDateTime(data.checkedOut || [], 'returnDateISO', 'returnTime'), ['markReturned', 'lostDamaged', 'revise'], { label: 'Mark all returned', status: 'Returned', hoistMeta: false }, false, 'return');
+    renderGroupedSection('overduePickupsList', 'overduePickupsCount', data.overduePickups || [], ['markLentOut', 'revise', 'cancel'], { label: 'Mark all lent out', status: 'Lent Out', hoistMeta: false }, true, 'pickup');
+    renderGroupedSection('overdueList', 'overdueCount', data.overdue || [], ['markReturned', 'revise'], { label: 'Mark all returned', status: 'Returned', hoistMeta: false }, true, 'return');
     renderConflicts(data.conflicts || []);
     renderPastReservations('pastReservationsList', 'pastReservationsCount', data.pastReservations || []);
     SECTION_KEYS.forEach(applySectionState);
@@ -381,22 +381,7 @@ function saveRevise(row) {
   });
 }
 
-function renderSection(listId, countId, items, actions, showLate, emphasize) {
-  setCount(countId, items.length);
-  var el = document.getElementById(listId);
-  if (!items.length) { el.innerHTML = '<div class="admin-empty">Nothing here.</div>'; return; }
-  el.innerHTML = items.map(function(e) {
-    return '<div class="admin-card" data-search="' + esc(searchTextFor(e)) + '">' +
-      '<div class="admin-card-top"><span class="admin-card-name">' + esc(e.name) + '</span><span class="admin-card-lib">' + esc(e.library) + '</span></div>' +
-      itemLineHtml(e) +
-      metaHtml(e, showLate, emphasize) +
-      '<div class="admin-card-actions">' + actionButtonsHtml(e, actions) + '</div>' +
-      reviseFormHtml(e) +
-      '</div>';
-  }).join('');
-}
-
-function renderGroupedSection(listId, countId, items, actions, bulkDef, emphasize) {
+function renderGroupedSection(listId, countId, items, actions, bulkDef, showLate, emphasize) {
   setCount(countId, items.length);
   var el = document.getElementById(listId);
   if (!items.length) { el.innerHTML = '<div class="admin-empty">Nothing here.</div>'; return; }
@@ -409,7 +394,7 @@ function renderGroupedSection(listId, countId, items, actions, bulkDef, emphasiz
     var itemsHtml = group.map(function(e) {
       return '<div class="admin-group-item">' +
         itemLineHtml(e) +
-        (bulkDef.hoistMeta ? '' : metaHtml(e, false, emphasize)) +
+        (bulkDef.hoistMeta ? '' : metaHtml(e, showLate, emphasize)) +
         '<div class="admin-card-actions">' + actionButtonsHtml(e, actions) + '</div>' +
         reviseFormHtml(e) +
         '</div>';
@@ -417,7 +402,7 @@ function renderGroupedSection(listId, countId, items, actions, bulkDef, emphasiz
     return '<div class="admin-card' + (group.length > 1 ? ' admin-group-card' : '') + '" data-search="' + esc(searchText) + '">' +
       '<div class="admin-card-top"><span class="admin-card-name">' + esc(first.name) + '</span><span class="admin-card-lib">' + esc(first.library) + '</span></div>' +
       groupLabel +
-      (bulkDef.hoistMeta ? metaHtml(first, false, emphasize) : '') +
+      (bulkDef.hoistMeta ? metaHtml(first, showLate, emphasize) : '') +
       bulkButtonsHtml(group, actions, bulkDef) +
       (group.length > 1 ? groupReviseFormHtml(groupKey, group) : '') +
       '<div class="admin-group-items">' + itemsHtml + '</div>' +

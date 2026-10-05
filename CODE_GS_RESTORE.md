@@ -14,7 +14,7 @@ version → Deploy.**
 ```javascript
 // ==========================================
 // SF LENDING LIBRARY — Google Apps Script
-// v2.0 Unified — Last updated: 2026-09-24 2:46 PM PDT
+// v2.0 Unified — Last updated: 2026-10-05 1:09 AM PDT
 // ==========================================
 
 // ── Tabs ─────────────────────────────────
@@ -536,7 +536,7 @@ function sendReceiptEmail(data, items, libraryKey) {
     'Once your reservation is confirmed on our end, you\'ll receive calendar invitations for pickup and return along with the address for the lending library.\n\n' +
     'If you\'re driving, you\'re welcome to park temporarily in front of the house. The tow away signs are ours — just be mindful of street sweeping.\n\n' +
     'In the meantime, check out our FAQs at sflendinglibrary.org for everything you need to know.\n\n' +
-    'Questions? WhatsApp me at ' + lib.phone + ': ' + reminderWhatsAppLink(lib.phone) + '\n\n' +
+    'This confirmation is sent automatically — if you\'d like to reach me directly, WhatsApp me at ' + lib.phone + ': ' + reminderWhatsAppLink(lib.phone) + '\n\n' +
     'Thanks,\nLauren';
   GmailApp.sendEmail(email, subject, body, { bcc: Session.getEffectiveUser().getEmail() });
 }
@@ -685,6 +685,7 @@ function buildReminderEmail(kind, firstName, lib, deco, dateFmt, time, items, ca
           '<a href="' + waLink + '" style="color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">WhatsApp me</a> today to confirm and coordinate ' + ctaVerb + '.' +
         '</div>' +
         '<p style="font-size: ' + REMINDER_FS_BASE + '; color:#4E5A6B; margin:0 0 16px;">Address &amp; parking details are in your calendar invite. Questions? <a href="https://www.sflendinglibrary.org" style="color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">www.sflendinglibrary.org</a></p>' +
+        '<p style="font-size: ' + REMINDER_FS_XS + '; color:#8A97A6; margin:0 0 16px;">This reminder is sent automatically. Want to reach me directly? <a href="' + waLink + '" style="color:' + REMINDER_STAMP_COLOR + '; font-weight:bold;">WhatsApp me</a>.</p>' +
         '<p style="font-size: ' + REMINDER_FS_BASE + '; color:#1F2C3D; margin:0;">See you soon!<br>Lauren</p>' +
       '</div>' +
       '<div style="text-align:center; margin-top: 18px;">' +
@@ -703,6 +704,7 @@ function buildReminderEmail(kind, firstName, lib, deco, dateFmt, time, items, ca
     'TO DO\n' +
     '[ ] WhatsApp me at ' + lib.phone + ' today to confirm and coordinate ' + ctaVerb + ': ' + waLink + '\n\n' +
     'Address & parking details are in your calendar invite. Questions? www.sflendinglibrary.org\n\n' +
+    'This reminder is sent automatically — want to reach me directly? WhatsApp me: ' + waLink + '\n\n' +
     'See you soon!\nLauren';
   return { subject: subject, html: html, text: text };
 }

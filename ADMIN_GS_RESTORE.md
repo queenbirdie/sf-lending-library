@@ -243,6 +243,27 @@ function getAdminData(passcode) {
   };
 }
 
+// Guards every admin write against acting on the wrong row. The admin
+// dashboard's buttons carry a row number captured whenever getAdminData()
+// last ran — but nothing in this file ever inserts or deletes sheet rows,
+// so the only way that row number goes stale is someone manually
+// inserting/deleting/clearing rows directly in the sheet after the
+// dashboard loaded. When that happens, a click on a dashboard tab that
+// hasn't refreshed writes into whatever now sits at that old row number
+// instead of the reservation it was meant for — silently corrupting an
+// unrelated reservation, or (if rows were only inserted, not deleted)
+// landing on a blank row and leaving an orphaned Status value with no
+// other data next to it. ts is the row's own Timestamp (col B) in ms, as
+// the dashboard last saw it (`sortKey` in getAdminData()'s entries) —
+// if the row at that position no longer has that exact timestamp, the
+// write is refused instead of silently landing on the wrong row.
+function verifyRowTimestamp(sheet, row, ts) {
+  if (!ts) return true;
+  var cellVal = sheet.getRange(row, 2).getValue(); // B: Timestamp
+  var actualMs = cellVal instanceof Date ? cellVal.getTime() : new Date(cellVal).getTime();
+  return actualMs === parseInt(ts);
+}
+
 function applyReservationStatus(sheet, row, newStatus, today) {
   sheet.getRange(row, RSVP_STATUS_COL).setValue(newStatus);
   if (newStatus === 'Returned') {
@@ -266,6 +287,9 @@ function adminUpdateStatus(formData) {
     return { success: false, message: 'Invalid request.' };
   }
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
+  if (!verifyRowTimestamp(sheet, row, formData.ts)) {
+    return { success: false, message: 'This reservation may have moved — please refresh the dashboard and try again.' };
+  }
   var today = new Date(); today.setHours(0, 0, 0, 0);
   applyReservationStatus(sheet, row, newStatus, today);
   return { success: true };
@@ -275,13 +299,22 @@ function adminBatchUpdateStatus(formData) {
   if (!checkAdminPasscode(formData.passcode)) return { success: false, message: 'Invalid passcode.' };
   var newStatus = String(formData.status || '').trim();
   var validStatuses = ['Confirmed', 'Cancelled', 'Lent Out', 'Returned', 'Lost or Damaged'];
-  var rows = (Array.isArray(formData.rows) ? formData.rows : []).map(function(r) { return parseInt(r); }).filter(function(r) { return r && r >= 2; });
-  if (!rows.length || validStatuses.indexOf(newStatus) === -1) {
+  var entries = (Array.isArray(formData.rows) ? formData.rows : [])
+    .map(function(r) { return (r && typeof r === 'object') ? { row: parseInt(r.row), ts: r.ts } : { row: parseInt(r), ts: null }; })
+    .filter(function(e) { return e.row && e.row >= 2; });
+  if (!entries.length || validStatuses.indexOf(newStatus) === -1) {
     return { success: false, message: 'Invalid request.' };
   }
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
+  // Check every row's identity before writing any of them, so one stale
+  // row in the batch aborts the whole bulk action instead of partially
+  // applying it to the rest.
+  var mismatch = entries.some(function(e) { return !verifyRowTimestamp(sheet, e.row, e.ts); });
+  if (mismatch) {
+    return { success: false, message: 'One or more of these reservations may have moved — please refresh the dashboard and try again.' };
+  }
   var today = new Date(); today.setHours(0, 0, 0, 0);
-  rows.forEach(function(row) { applyReservationStatus(sheet, row, newStatus, today); });
+  entries.forEach(function(e) { applyReservationStatus(sheet, e.row, newStatus, today); });
   return { success: true };
 }
 
@@ -298,8 +331,8 @@ function adminBatchUpdateStatus(formData) {
 function adminReviseReservation(formData) {
   if (!checkAdminPasscode(formData.passcode)) return { success: false, message: 'Invalid passcode.' };
 
-  var rowsInput = Array.isArray(formData.rows) ? formData.rows : [{ row: formData.row, qty: formData.qty }];
-  var entries = rowsInput.map(function(r) { return { row: parseInt(r.row), qty: parseInt(r.qty) }; });
+  var rowsInput = Array.isArray(formData.rows) ? formData.rows : [{ row: formData.row, qty: formData.qty, ts: formData.ts }];
+  var entries = rowsInput.map(function(r) { return { row: parseInt(r.row), qty: parseInt(r.qty), ts: r.ts }; });
   if (!entries.length || entries.some(function(e) { return !e.row || e.row < 2; })) {
     return { success: false, message: 'Invalid request.' };
   }
@@ -318,6 +351,17 @@ function adminReviseReservation(formData) {
   var invRows = ss.getSheetByName(INV_TAB).getDataRange().getValues();
   var allRsvpRows = sheet.getDataRange().getValues().slice(1);
   var tz = Session.getScriptTimeZone();
+
+  // Verify every row still matches what the dashboard expected before
+  // touching anything — including before the sibling auto-discovery below,
+  // which would otherwise read a stale/wrong row's data and go hunting for
+  // "siblings" unrelated to the reservation the admin actually meant to
+  // revise. See verifyRowTimestamp() for why this can go stale at all.
+  for (var v = 0; v < entries.length; v++) {
+    if (!verifyRowTimestamp(sheet, entries[v].row, entries[v].ts)) {
+      return { success: false, message: 'This reservation may have moved — please refresh the dashboard and try again.' };
+    }
+  }
 
   // A single row (the per-item revise form, formData.row) might actually be
   // part of a multi-item reservation. A reservation always has one shared

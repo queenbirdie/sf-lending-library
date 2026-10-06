@@ -288,6 +288,34 @@ shows on the Overdue/Overdue-pickups sections once grouped — that's the
 one thing the old `renderSection()` did that a naive copy-paste of the
 other sections' calls would have silently dropped.
 
+**Every admin write that targets a row number verifies that row's
+identity first.** The dashboard's buttons (mark returned/lent out,
+revise, bulk actions) carry a row number captured whenever
+`getAdminData()` last ran. Nothing in `Code.js`/`Admin.gs` ever inserts
+or deletes sheet rows — but Lauren does, manually, directly in the sheet
+(e.g. blank spacer rows between days). That shifts every row number below
+the edit, so a dashboard tab left open from before the edit writes its
+next click into whatever now sits at that stale row number instead of
+the reservation it meant — silently corrupting an unrelated reservation,
+or, if rows were only inserted, landing on a blank row and leaving an
+orphaned `Status`-only value with nothing else next to it (reported
+2026-10-06: blank rows plus a couple of stray "Lent Out" cells with no
+other data, found in the `reservations` sheet). Fixed by
+`verifyRowTimestamp(sheet, row, ts)` in `Admin.gs` — `ts` is the row's own
+Timestamp (col B) in ms, exactly `sortKey` from `getAdminData()`'s
+entries, which `assets/js/admin.js` now threads through every write call
+(`updateStatus`, `bulkUpdateStatus`, `saveRevise`, `saveGroupRevise`,
+`bulkButtonsHtml`'s per-row `{row, ts}` pairs). `adminUpdateStatus()`,
+`adminBatchUpdateStatus()`, and `adminReviseReservation()` all check this
+before writing anything (the whole batch is checked before any row in it
+is touched, same all-or-nothing pattern as the existing availability
+check) — on a mismatch, the write is refused with "This reservation may
+have moved — please refresh the dashboard and try again." instead of
+silently landing on the wrong row. `adminReviseReservation()`'s
+sibling-auto-discovery also waits for this check, since discovering
+"siblings" from a stale/wrong row's data would find rows unrelated to the
+reservation actually being revised.
+
 ## Dedicated calendar for pickup/return invites
 
 Invites go to `LIBRARY_CALENDAR_ID` (`Code.js`) — a secondary calendar in

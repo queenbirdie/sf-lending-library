@@ -234,12 +234,12 @@ function filterAdminSearch(query) {
 }
 
 var ACTION_DEFS = {
-  confirm:      { label: 'Confirm',        cls: 'admin-btn-confirm', onclick: function(e) { return 'updateStatus(' + e.row + ",'Confirmed',this)"; } },
-  decline:      { label: 'Decline',        cls: 'admin-btn-decline', onclick: function(e) { return 'updateStatus(' + e.row + ",'Cancelled',this)"; } },
-  cancel:       { label: 'Cancel',         cls: 'admin-btn-decline', onclick: function(e) { return 'updateStatus(' + e.row + ",'Cancelled',this)"; } },
-  markLentOut:  { label: 'Mark Lent Out',  cls: 'admin-btn-done',    onclick: function(e) { return 'updateStatus(' + e.row + ",'Lent Out',this)"; } },
-  markReturned: { label: 'Mark Returned',  cls: 'admin-btn-done',    onclick: function(e) { return 'updateStatus(' + e.row + ",'Returned',this)"; } },
-  lostDamaged:  { label: 'Lost/Damaged',   cls: 'admin-btn-decline', onclick: function(e) { return 'updateStatus(' + e.row + ",'Lost or Damaged',this)"; } },
+  confirm:      { label: 'Confirm',        cls: 'admin-btn-confirm', onclick: function(e) { return 'updateStatus(' + e.row + ',' + e.sortKey + ",'Confirmed',this)"; } },
+  decline:      { label: 'Decline',        cls: 'admin-btn-decline', onclick: function(e) { return 'updateStatus(' + e.row + ',' + e.sortKey + ",'Cancelled',this)"; } },
+  cancel:       { label: 'Cancel',         cls: 'admin-btn-decline', onclick: function(e) { return 'updateStatus(' + e.row + ',' + e.sortKey + ",'Cancelled',this)"; } },
+  markLentOut:  { label: 'Mark Lent Out',  cls: 'admin-btn-done',    onclick: function(e) { return 'updateStatus(' + e.row + ',' + e.sortKey + ",'Lent Out',this)"; } },
+  markReturned: { label: 'Mark Returned',  cls: 'admin-btn-done',    onclick: function(e) { return 'updateStatus(' + e.row + ',' + e.sortKey + ",'Returned',this)"; } },
+  lostDamaged:  { label: 'Lost/Damaged',   cls: 'admin-btn-decline', onclick: function(e) { return 'updateStatus(' + e.row + ',' + e.sortKey + ",'Lost or Damaged',this)"; } },
   revise:       { label: 'Revise',         cls: 'admin-btn-neutral', onclick: function(e) { return 'toggleRevise(' + e.row + ')'; } }
 };
 
@@ -263,7 +263,7 @@ function timeSelectHtml(id, current) {
 
 function groupReviseFormHtml(groupKey, group) {
   var first = group[0];
-  var rowsInfo = JSON.stringify(group.map(function(g) { return { row: g.row, qty: g.qty }; }));
+  var rowsInfo = JSON.stringify(group.map(function(g) { return { row: g.row, qty: g.qty, ts: g.sortKey }; }));
   return '<div class="admin-revise-form" id="grouprevise-' + esc(groupKey) + '" style="display:none">' +
     '<div class="admin-revise-row">' +
       '<div class="admin-revise-field"><label>Pickup date</label><input type="date" id="grouprevisePickup-' + esc(groupKey) + '" value="' + esc(first.pickupDateISO) + '"></div>' +
@@ -316,7 +316,7 @@ function saveGroupRevise(groupKey, rowsInfo) {
 
 function bulkButtonsHtml(group, actions, bulkDef) {
   if (group.length <= 1) return '';
-  var rows = group.map(function(g) { return g.row; });
+  var rows = group.map(function(g) { return { row: g.row, ts: g.sortKey }; });
   var rowsJson = JSON.stringify(rows);
   var primary = bulkDef ? '<button class="admin-btn admin-btn-bulk" onclick="bulkUpdateStatus(' + rowsJson + ",'" + bulkDef.status + "',this,'" + esc(bulkDef.label) + "')\">" + esc(bulkDef.label) + ' (' + group.length + ')</button>' : '';
   var secondary = '';
@@ -349,7 +349,7 @@ function reviseFormHtml(e) {
     '</div>' +
     '<div class="admin-revise-error" id="reviseError-' + e.row + '" style="display:none"></div>' +
     '<div class="admin-card-actions">' +
-      '<button class="admin-btn admin-btn-confirm" onclick="saveRevise(' + e.row + ')">Save changes</button>' +
+      '<button class="admin-btn admin-btn-confirm" onclick="saveRevise(' + e.row + ',' + e.sortKey + ')">Save changes</button>' +
       '<button class="admin-btn admin-btn-neutral" onclick="toggleRevise(' + e.row + ')">Cancel edit</button>' +
     '</div></div>';
 }
@@ -359,7 +359,7 @@ function toggleRevise(row) {
   if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
-function saveRevise(row) {
+function saveRevise(row, ts) {
   var pickupDate = document.getElementById('revisePickup-' + row).value;
   var pickupTime = document.getElementById('revisePickupTime-' + row).value;
   var returnDate = document.getElementById('reviseReturn-' + row).value;
@@ -368,7 +368,7 @@ function saveRevise(row) {
   var errEl = document.getElementById('reviseError-' + row);
   errEl.style.display = 'none';
   if (!pickupDate || !returnDate) { errEl.textContent = 'Pickup and return dates are required.'; errEl.style.display = 'block'; return; }
-  apiPost({ action: 'adminReviseReservation', passcode: adminPasscode, row: row, pickupDate: pickupDate, pickupTime: pickupTime, returnDate: returnDate, returnTime: returnTime, qty: qty }, function(result) {
+  apiPost({ action: 'adminReviseReservation', passcode: adminPasscode, row: row, ts: ts, pickupDate: pickupDate, pickupTime: pickupTime, returnDate: returnDate, returnTime: returnTime, qty: qty }, function(result) {
     if (result.success) {
       loadAdminData(null, { silent: true });
     } else {
@@ -437,10 +437,10 @@ function renderPastReservations(listId, countId, items) {
   }).join('');
 }
 
-function updateStatus(row, status, btn) {
+function updateStatus(row, ts, status, btn) {
   btn.disabled = true;
   btn.textContent = 'Saving...';
-  apiPost({ action: 'adminUpdateStatus', passcode: adminPasscode, row: row, status: status }, function(result) {
+  apiPost({ action: 'adminUpdateStatus', passcode: adminPasscode, row: row, ts: ts, status: status }, function(result) {
     if (result.success) {
       loadAdminData(null, { silent: true });
     } else {

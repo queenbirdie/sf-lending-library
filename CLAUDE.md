@@ -106,19 +106,25 @@ built with `<table>` + `vertical-align:middle`, not `position:absolute`
 or an oversized font glyph — both were tried and broke on mobile Gmail
 before landing on the table-cell approach used now.
 
-**"This is automated, WhatsApp me directly" note.** Both the reminder
+**"WhatsApp me, don't reply to this email" note.** Both the reminder
 email (`buildReminderEmail()`, HTML and plain-text versions) and the
-receipt/confirmation email (`sendReceiptEmail()`) tell the recipient the
-email was sent automatically and give a direct WhatsApp link/number if
-they want to reach Lauren rather than reply to the email itself — added
-per Lauren's request (2026-10-05) so borrowers don't mistake an
-auto-generated email for one she personally wrote and sent. Distinct from
-the existing `waLink`/"WhatsApp me" CTA already in the reminder's "To Do"
-box, which is about confirming that specific pickup/return — this note is
-a general "if you need me for anything else" footer, styled muted/small
-(`REMINDER_FS_XS`, `#8A97A6`) so it doesn't compete with the real CTA.
+receipt/confirmation email (`sendReceiptEmail()`) steer the recipient to
+WhatsApp instead of replying to the email itself — added per Lauren's
+request (2026-10-05) so borrowers don't mistake an auto-generated email
+for one she personally wrote and sent, then reply to it expecting her to
+see it there. Distinct from the existing `waLink`/"WhatsApp me" CTA
+already in the reminder's "To Do" box, which is about confirming that
+specific pickup/return — this note is a general "if you need me for
+anything else" footer. Wording differs slightly between the two: the
+reminder email keeps the original "This reminder is sent automatically.
+Want to reach me directly? WhatsApp me." framing, styled muted/small
+(`REMINDER_FS_XS`, `#8A97A6`) so it doesn't compete with the reminder's
+real CTA; the receipt email was simplified (2026-10-09, per Lauren) to a
+plain `'Questions? Message me on WhatsApp - ' + lib.phone + '.'` instead
+— same intent, shorter, no separate "this is automated" framing, since
+the receipt email has no competing CTA to stay out of the way of.
 Internal-only emails (nightly audit, double-booking alerts, etc. — sent
-to Lauren herself, not borrowers) deliberately don't get this note.
+to Lauren herself, not borrowers) deliberately don't get either note.
 
 ## Care Tags (return-reminder item-specific guidance)
 

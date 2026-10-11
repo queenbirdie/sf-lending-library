@@ -325,6 +325,26 @@ sibling-auto-discovery also waits for this check, since discovering
 "siblings" from a stale/wrong row's data would find rows unrelated to the
 reservation actually being revised.
 
+**That same change briefly broke every bulk button** ("Confirm all",
+"Mark all returned", "Mark all lent out", "Cancel all", "Decline all" —
+reported 2026-10-11 as "Confirm all" not clickable). `bulkButtonsHtml()`
+in `assets/js/admin.js` builds each button's `onclick="..."` as a
+double-quoted HTML attribute, and splices the per-row `{row, ts}` list
+into it via `JSON.stringify()` — but `JSON.stringify` always
+double-quotes object keys (`[{"row":5,"ts":...}]`), so those embedded
+`"` characters terminated the `onclick="..."` attribute early and
+corrupted the button's markup. Before this change `rows` was a plain
+array of numbers (`[5,6]` — no quotes in its JSON at all), so the same
+double-quoted attribute was always safe; adding `ts` is what exposed it.
+Fixed by single-quoting those two `onclick='...'` attributes instead
+(matching the pattern `toggleGroupRevise()`'s button already used safely
+a few lines below) and switching the JS string literals inside them
+(`status`, `label`) from single to double quotes so they don't conflict
+with the new single-quoted attribute delimiter. Any future change to
+what gets JSON-stringified into one of these inline `onclick` attributes
+should be checked against which quote character the surrounding HTML
+attribute uses — mixing them is what caused this.
+
 ## Dedicated calendar for pickup/return invites
 
 Invites go to `LIBRARY_CALENDAR_ID` (`Code.js`) — a secondary calendar in

@@ -317,12 +317,17 @@ function saveGroupRevise(groupKey, rowsInfo) {
 function bulkButtonsHtml(group, actions, bulkDef) {
   if (group.length <= 1) return '';
   var rows = group.map(function(g) { return { row: g.row, ts: g.sortKey }; });
+  // rowsJson is a JSON array of objects, so it contains double quotes
+  // (JSON.stringify always double-quotes object keys) — these onclick
+  // attributes must be single-quoted (and any JS string literals inside
+  // them double-quoted instead) so the embedded JSON doesn't terminate
+  // the attribute early, same as toggleGroupRevise()'s onclick below.
   var rowsJson = JSON.stringify(rows);
-  var primary = bulkDef ? '<button class="admin-btn admin-btn-bulk" onclick="bulkUpdateStatus(' + rowsJson + ",'" + bulkDef.status + "',this,'" + esc(bulkDef.label) + "')\">" + esc(bulkDef.label) + ' (' + group.length + ')</button>' : '';
+  var primary = bulkDef ? '<button class="admin-btn admin-btn-bulk" onclick=\'bulkUpdateStatus(' + rowsJson + ',"' + bulkDef.status + '",this,"' + esc(bulkDef.label) + '")\'>' + esc(bulkDef.label) + ' (' + group.length + ')</button>' : '';
   var secondary = '';
   if (actions.indexOf('cancel') !== -1 || actions.indexOf('decline') !== -1) {
     var cancelLabel = actions.indexOf('decline') !== -1 ? 'Decline all' : 'Cancel all';
-    secondary += '<button class="admin-btn admin-btn-decline" onclick="bulkUpdateStatus(' + rowsJson + ",'Cancelled',this,'" + cancelLabel + "')\">" + cancelLabel + ' (' + group.length + ')</button>';
+    secondary += '<button class="admin-btn admin-btn-decline" onclick=\'bulkUpdateStatus(' + rowsJson + ',"Cancelled",this,"' + cancelLabel + '")\'>' + cancelLabel + ' (' + group.length + ')</button>';
   }
   if (actions.indexOf('revise') !== -1) {
     var groupKey = String(group[0].groupKey || group[0].row);

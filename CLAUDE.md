@@ -325,6 +325,59 @@ sibling-auto-discovery also waits for this check, since discovering
 "siblings" from a stale/wrong row's data would find rows unrelated to the
 reservation actually being revised.
 
+**That same change briefly broke every bulk button** ("Confirm all",
+"Mark all returned", "Mark all lent out", "Cancel all", "Decline all" —
+reported 2026-10-11 as "Confirm all" not clickable). `bulkButtonsHtml()`
+in `assets/js/admin.js` builds each button's `onclick="..."` as a
+double-quoted HTML attribute, and splices the per-row `{row, ts}` list
+into it via `JSON.stringify()` — but `JSON.stringify` always
+double-quotes object keys (`[{"row":5,"ts":...}]`), so those embedded
+`"` characters terminated the `onclick="..."` attribute early and
+corrupted the button's markup. Before this change `rows` was a plain
+array of numbers (`[5,6]` — no quotes in its JSON at all), so the same
+double-quoted attribute was always safe; adding `ts` is what exposed it.
+Fixed by single-quoting those two `onclick='...'` attributes instead
+(matching the pattern `toggleGroupRevise()`'s button already used safely
+a few lines below) and switching the JS string literals inside them
+(`status`, `label`) from single to double quotes so they don't conflict
+with the new single-quoted attribute delimiter. Any future change to
+what gets JSON-stringified into one of these inline `onclick` attributes
+should be checked against which quote character the surrounding HTML
+attribute uses — mixing them is what caused this.
+
+**Follow-up from reviewing that fix (2026-10-12):** switching those two
+attributes to single-quoted exposed a second, still-latent version of the
+same bug — `esc()` (`common.js`) escapes `"` but not `'`, so an
+apostrophe anywhere in `bulkDef.label` or `cancelLabel` would terminate
+the new single-quoted attribute the same way the unescaped JSON did.
+Currently harmless (every label is a hardcoded string with no apostrophe:
+"Confirm all", "Mark all returned", etc.), but fixed anyway rather than
+left as a landmine for whoever adds a differently-worded label later.
+Fixed with a attribute-scoped helper, `escForSingleQuoteAttr()` in
+`admin.js`, used only for the copy of the label spliced into the
+`onclick='...'` attribute (the visible button text still uses plain
+`esc()`). **Deliberately not fixed by hardening `esc()` itself** to also
+escape `'` — `esc()`'s output is also used as a CSS attribute-selector
+value in `library.js`'s `removeFromCart()`
+(`document.querySelector('.item-card[data-name="' + esc(name) + '"]')`),
+where escaping `'` would break matching for any item name that actually
+contains an apostrophe (plausible for real inventory — "Kid's costume",
+etc.) — confirmed by simulating both the attribute-breakout and the
+CSS-selector cases before deciding. If a similar quote-mismatch bug shows
+up at a new call site, prefer a scoped fix over widening `esc()`'s
+behavior, since callers rely on it differently in different contexts.
+
+**Known improvement, not yet done:** every button in `admin.js` is wired
+via a hand-built inline `onclick="..."` string with manually-matched
+quote characters — the exact bug class behind both of the above. Moving
+dynamic values into `data-*` attributes (HTML-entity-escaped by the DOM
+automatically) and binding click handlers with `addEventListener` instead
+would remove this bug class entirely rather than relying on every future
+edit to re-verify quote-matching by hand. Not done here — it's a real
+rewrite of the rendering approach across the whole file, not a small fix,
+and nothing is currently broken — but worth doing deliberately rather
+than patching the same bug a third time.
+
 ## Dedicated calendar for pickup/return invites
 
 Invites go to `LIBRARY_CALENDAR_ID` (`Code.js`) — a secondary calendar in

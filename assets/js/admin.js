@@ -314,6 +314,18 @@ function saveGroupRevise(groupKey, rowsInfo) {
   });
 }
 
+// esc() (common.js) doesn't escape ' — fine for the double-quoted
+// attributes used everywhere else, but bulkButtonsHtml's onclick
+// attributes below are single-quoted (to hold the JSON-stringified rows
+// list, which contains "), so an apostrophe in the label would terminate
+// *this* attribute. Scoped to this one call site rather than hardening
+// esc() itself, since esc() output is also used as a CSS attribute-
+// selector value elsewhere (library.js removeFromCart()) where escaping
+// ' would break matching an item name that actually contains one.
+function escForSingleQuoteAttr(s) {
+  return esc(s).replace(/'/g, '&#39;');
+}
+
 function bulkButtonsHtml(group, actions, bulkDef) {
   if (group.length <= 1) return '';
   var rows = group.map(function(g) { return { row: g.row, ts: g.sortKey }; });
@@ -323,11 +335,11 @@ function bulkButtonsHtml(group, actions, bulkDef) {
   // them double-quoted instead) so the embedded JSON doesn't terminate
   // the attribute early, same as toggleGroupRevise()'s onclick below.
   var rowsJson = JSON.stringify(rows);
-  var primary = bulkDef ? '<button class="admin-btn admin-btn-bulk" onclick=\'bulkUpdateStatus(' + rowsJson + ',"' + bulkDef.status + '",this,"' + esc(bulkDef.label) + '")\'>' + esc(bulkDef.label) + ' (' + group.length + ')</button>' : '';
+  var primary = bulkDef ? '<button class="admin-btn admin-btn-bulk" onclick=\'bulkUpdateStatus(' + rowsJson + ',"' + bulkDef.status + '",this,"' + escForSingleQuoteAttr(bulkDef.label) + '")\'>' + esc(bulkDef.label) + ' (' + group.length + ')</button>' : '';
   var secondary = '';
   if (actions.indexOf('cancel') !== -1 || actions.indexOf('decline') !== -1) {
     var cancelLabel = actions.indexOf('decline') !== -1 ? 'Decline all' : 'Cancel all';
-    secondary += '<button class="admin-btn admin-btn-decline" onclick=\'bulkUpdateStatus(' + rowsJson + ',"Cancelled",this,"' + cancelLabel + '")\'>' + cancelLabel + ' (' + group.length + ')</button>';
+    secondary += '<button class="admin-btn admin-btn-decline" onclick=\'bulkUpdateStatus(' + rowsJson + ',"Cancelled",this,"' + escForSingleQuoteAttr(cancelLabel) + '")\'>' + esc(cancelLabel) + ' (' + group.length + ')</button>';
   }
   if (actions.indexOf('revise') !== -1) {
     var groupKey = String(group[0].groupKey || group[0].row);

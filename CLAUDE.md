@@ -345,6 +345,39 @@ what gets JSON-stringified into one of these inline `onclick` attributes
 should be checked against which quote character the surrounding HTML
 attribute uses — mixing them is what caused this.
 
+**Follow-up from reviewing that fix (2026-10-12):** switching those two
+attributes to single-quoted exposed a second, still-latent version of the
+same bug — `esc()` (`common.js`) escapes `"` but not `'`, so an
+apostrophe anywhere in `bulkDef.label` or `cancelLabel` would terminate
+the new single-quoted attribute the same way the unescaped JSON did.
+Currently harmless (every label is a hardcoded string with no apostrophe:
+"Confirm all", "Mark all returned", etc.), but fixed anyway rather than
+left as a landmine for whoever adds a differently-worded label later.
+Fixed with a attribute-scoped helper, `escForSingleQuoteAttr()` in
+`admin.js`, used only for the copy of the label spliced into the
+`onclick='...'` attribute (the visible button text still uses plain
+`esc()`). **Deliberately not fixed by hardening `esc()` itself** to also
+escape `'` — `esc()`'s output is also used as a CSS attribute-selector
+value in `library.js`'s `removeFromCart()`
+(`document.querySelector('.item-card[data-name="' + esc(name) + '"]')`),
+where escaping `'` would break matching for any item name that actually
+contains an apostrophe (plausible for real inventory — "Kid's costume",
+etc.) — confirmed by simulating both the attribute-breakout and the
+CSS-selector cases before deciding. If a similar quote-mismatch bug shows
+up at a new call site, prefer a scoped fix over widening `esc()`'s
+behavior, since callers rely on it differently in different contexts.
+
+**Known improvement, not yet done:** every button in `admin.js` is wired
+via a hand-built inline `onclick="..."` string with manually-matched
+quote characters — the exact bug class behind both of the above. Moving
+dynamic values into `data-*` attributes (HTML-entity-escaped by the DOM
+automatically) and binding click handlers with `addEventListener` instead
+would remove this bug class entirely rather than relying on every future
+edit to re-verify quote-matching by hand. Not done here — it's a real
+rewrite of the rendering approach across the whole file, not a small fix,
+and nothing is currently broken — but worth doing deliberately rather
+than patching the same bug a third time.
+
 ## Dedicated calendar for pickup/return invites
 
 Invites go to `LIBRARY_CALENDAR_ID` (`Code.js`) — a secondary calendar in

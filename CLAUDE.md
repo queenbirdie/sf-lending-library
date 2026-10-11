@@ -115,14 +115,17 @@ for one she personally wrote and sent, then reply to it expecting her to
 see it there. Distinct from the existing `waLink`/"WhatsApp me" CTA
 already in the reminder's "To Do" box, which is about confirming that
 specific pickup/return — this note is a general "if you need me for
-anything else" footer. Wording differs slightly between the two: the
-reminder email keeps the original "This reminder is sent automatically.
-Want to reach me directly? WhatsApp me." framing, styled muted/small
+anything else" footer. Wording differs between the two: the reminder
+email keeps "This reminder is sent automatically. Want to reach me
+directly? WhatsApp me." as a clickable link, styled muted/small
 (`REMINDER_FS_XS`, `#8A97A6`) so it doesn't compete with the reminder's
-real CTA; the receipt email was simplified (2026-10-09, per Lauren) to a
-plain `'Questions? Message me on WhatsApp - ' + lib.phone + '.'` instead
-— same intent, shorter, no separate "this is automated" framing, since
-the receipt email has no competing CTA to stay out of the way of.
+real CTA; the receipt email (plain text, no `htmlBody`) settled — after
+two rounds of wording changes (2026-10-09, 2026-10-11, per Lauren) — on
+`'This confirmation is sent automatically — if you\'d like to reach me
+directly, WhatsApp me at ' + lib.phone + '.'`, a plain phone number with
+**no** `reminderWhatsAppLink()` wa.me link appended, unlike every other
+WhatsApp mention in this file — a deliberate, Lauren-specified exception,
+not an oversight; don't "fix" it by adding the link back.
 Internal-only emails (nightly audit, double-booking alerts, etc. — sent
 to Lauren herself, not borrowers) deliberately don't get either note.
 

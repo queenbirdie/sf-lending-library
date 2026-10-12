@@ -442,6 +442,42 @@ Reservations!H vs the calendar tab's own name column) and `debugItem()`'s
 logging. `buildCurrentlyOut()` was never affected — it reads a
 reservation's own stored fields directly, no inventory join involved.
 
+**Item ID shown next to the item name, admin-facing surfaces only**
+(2026-10-11, per Lauren's request, for cross-referencing against the
+`inventory` sheet) — as `[KG-175]` immediately after the name, before any
+brand/size parenthetical. Deliberately scoped to what she herself sees:
+- **Admin dashboard** (`assets/js/admin.js`): `itemLineHtml()` — the one
+  function every reservation card's item row renders through — plus
+  `renderConflicts()`'s double-booking cards. Styled muted
+  (`.admin-item-id`, `#8A97A6`) so it doesn't compete with the item name.
+  Also folded into `searchTextFor()` so the dashboard search box matches
+  on Item ID too, not just name/email/phone.
+- **Admin-only audit emails** (`Code.js`, all sent only to
+  `Session.getEffectiveUser().getEmail()`, never to borrowers):
+  `nightlyAudit()` (both its double-booking section and its overdue-
+  pickup/return lines), `auditForDoubleBookings()`, `dailyScheduleEmail()`.
+- **Borrower-facing emails & calendar invites** — `sendReceiptEmail()`,
+  `buildReminderEmail()` (via `sendPickupReminders()`/
+  `sendReturnReminders()`'s local `itemLabel()` helpers), and
+  `sendCalendarInvites()` (both its item list and its "MULTIPLE UNITS"
+  banner) — borrowers see `[ID]` too here, not just Lauren; she explicitly
+  opted into this scope rather than admin-only.
+- **Deliberately left out**: the public site's item-listing cards
+  (`library.js`) — would need a backend change since the public API
+  doesn't send Item ID at all today, and Lauren didn't ask for borrowers
+  to see it while *browsing*, only on what they already receive.
+
+`getAdminData()`'s reservation `entry` objects (and
+`collectPastFromSheet()`'s past-reservation objects, and the
+double-booking `conflicts` array) didn't carry an `itemId` field before
+this — each function computed its own local `itemId`/`xItemId` var for
+lookups (availability, image URL) but never attached it to the object it
+returned, even though the data was sitting right there. Same gap existed
+in `Code.js`'s audit functions and reminder `itemLabel()` helpers — the
+row's `r[5]` (Item ID column) was already in scope at every one of these
+call sites, just never read. No new data flow was needed anywhere, only
+threading an already-available value one step further.
+
 ## Deployment
 
 - `assets/`, `layouts/`, `content/`, `data/`, `hugo.toml` → live site,

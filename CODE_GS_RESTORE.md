@@ -14,7 +14,7 @@ version → Deploy.**
 ```javascript
 // ==========================================
 // SF LENDING LIBRARY — Google Apps Script
-// v2.0 Unified — Last updated: 2026-10-10 10:53 PM PDT
+// v2.0 Unified — Last updated: 2026-10-11 9:24 PM PDT
 // ==========================================
 
 // ── Tabs ─────────────────────────────────
@@ -517,6 +517,7 @@ function sendReceiptEmail(data, items, libraryKey) {
   function itemLabel(i) {
     if (typeof i !== 'object') return String(i);
     var label = i.name;
+    if (i.id) label += ' [' + i.id + ']';
     var details = [i.brand, i.size].filter(Boolean).join(', ');
     if (details) label += ' (' + details + ')';
     if (i.qty > 1) label += ' x' + i.qty;
@@ -725,6 +726,8 @@ function sendPickupReminders() {
   function itemLabel(r) {
     var qty = parseInt(r[8]); if (isNaN(qty) || qty < 1) qty = 1;
     var label = String(r[7]).trim();
+    var itemId = String(r[5] || '').trim();
+    if (itemId) label += ' [' + itemId + ']';
     var details = [String(r[6] || '').trim(), String(r[9] || '').trim()].filter(Boolean).join(', ');
     if (details) label += ' (' + details + ')';
     if (qty > 1) label += ' x' + qty;
@@ -776,6 +779,8 @@ function sendReturnReminders() {
   function itemLabel(r) {
     var qty = parseInt(r[8]); if (isNaN(qty) || qty < 1) qty = 1;
     var label = String(r[7]).trim();
+    var itemId = String(r[5] || '').trim();
+    if (itemId) label += ' [' + itemId + ']';
     var details = [String(r[6] || '').trim(), String(r[9] || '').trim()].filter(Boolean).join(', ');
     if (details) label += ' (' + details + ')';
     if (qty > 1) label += ' x' + qty;
@@ -929,7 +934,7 @@ function sendPendingReceipts() {
       })
       .map(function(sr) {
         var qty = (sr[8] && !isNaN(parseInt(sr[8]))) ? parseInt(sr[8]) : 1;
-        return { name: String(sr[7]).trim(), brand: String(sr[6] || '').trim(), size: String(sr[9] || '').trim(), qty: qty };
+        return { name: String(sr[7]).trim(), id: String(sr[5] || '').trim(), brand: String(sr[6] || '').trim(), size: String(sr[9] || '').trim(), qty: qty };
       });
     try {
       sendReceiptEmail(r, items, libraryKey);
@@ -970,7 +975,7 @@ function maybeSendCombinedConfirmation(row) {
     .filter(function(r) { return String(r[15]).trim() === 'Confirmed'; })
     .map(function(r) {
       var qty = (r[8] && !isNaN(parseInt(r[8]))) ? parseInt(r[8]) : 1;
-      return { name: String(r[7]).trim(), brand: String(r[6] || '').trim(), size: String(r[9] || '').trim(), qty: qty };
+      return { name: String(r[7]).trim(), id: String(r[5] || '').trim(), brand: String(r[6] || '').trim(), size: String(r[9] || '').trim(), qty: qty };
     });
   if (!confirmedItems.length) return; // everything was cancelled, nothing to send
   // Per-submission dedup (includes timestamp to handle same-person same-dates repeat bookings)
@@ -1016,6 +1021,7 @@ function sendCalendarInvites(data, items, libraryKey) {
   function itemLabel(i) {
     if (typeof i !== 'object') return String(i);
     var label = i.name;
+    if (i.id) label += ' [' + i.id + ']';
     var details = [i.brand, i.size].filter(Boolean).join(', ');
     if (details) label += ' (' + details + ')';
     if (i.qty > 1) label += ' x' + i.qty;
@@ -1028,7 +1034,7 @@ function sendCalendarInvites(data, items, libraryKey) {
   var returnEnd   = new Date(returnStart.getTime() + 60 * 60 * 1000);
   var multiUnit = items.filter(function(i) { return typeof i === 'object' && i.qty > 1; });
   var multiUnitBanner = multiUnit.length
-    ? '⚠️ MULTIPLE UNITS: ' + multiUnit.map(function(i) { return i.name + ' x' + i.qty; }).join(', ') + '\n\n'
+    ? '⚠️ MULTIPLE UNITS: ' + multiUnit.map(function(i) { return i.name + (i.id ? ' [' + i.id + ']' : '') + ' x' + i.qty; }).join(', ') + '\n\n'
     : '';
   var tz = Session.getScriptTimeZone();
   var pickupFmt = Utilities.formatDate(new Date(pickupDate), tz, 'EEE, MMM d');
@@ -1113,7 +1119,7 @@ function sendPendingInvites() {
       .filter(function(sr) { return String(sr[15]).trim() === 'Confirmed'; })
       .map(function(sr) {
         var qty = (sr[8] && !isNaN(parseInt(sr[8]))) ? parseInt(sr[8]) : 1;
-        return { name: String(sr[7]).trim(), brand: String(sr[6] || '').trim(), size: String(sr[9] || '').trim(), qty: qty };
+        return { name: String(sr[7]).trim(), id: String(sr[5] || '').trim(), brand: String(sr[6] || '').trim(), size: String(sr[9] || '').trim(), qty: qty };
       });
     if (!confirmedItems.length) return;
     var lock = LockService.getScriptLock();
@@ -1236,7 +1242,7 @@ function nightlyAudit() {
       if (dayQty > maxQty) { maxQty = dayQty; worstDate = d; worstRows = dayRows; }
     });
     if (maxQty > totalQty) {
-      conflicts.push({ item: itemName, library: libraryKey, totalQty: totalQty, bookedQty: maxQty, worstDate: worstDate, rows: worstRows });
+      conflicts.push({ item: itemName, itemId: itemId, library: libraryKey, totalQty: totalQty, bookedQty: maxQty, worstDate: worstDate, rows: worstRows });
     }
   });
 
@@ -1287,6 +1293,8 @@ function nightlyAudit() {
     if (!email || !libraryKey) return;
     var name = String(r[2]).trim();
     var itemName = String(r[7]).trim();
+    var itemId = String(r[5] || '').trim();
+    var itemLabel = itemName + (itemId ? ' [' + itemId + ']' : '');
 
     if (status === 'Confirmed' && r[10]) {
       var pd = r[10] instanceof Date ? new Date(r[10]) : new Date(r[10]);
@@ -1296,7 +1304,7 @@ function nightlyAudit() {
         if (!seen3[pKey]) {
           seen3[pKey] = true;
           var daysLate1 = Math.round((today - pd) / 86400000);
-          overduePickups.push(name + ' <' + email + '> — ' + libraryKey + ' — ' + itemName + ' — pickup was ' + Utilities.formatDate(pd, tz, 'MMM d') + ' (' + daysLate1 + ' day' + (daysLate1 !== 1 ? 's' : '') + ' ago), still "Confirmed"');
+          overduePickups.push(name + ' <' + email + '> — ' + libraryKey + ' — ' + itemLabel + ' — pickup was ' + Utilities.formatDate(pd, tz, 'MMM d') + ' (' + daysLate1 + ' day' + (daysLate1 !== 1 ? 's' : '') + ' ago), still "Confirmed"');
         }
       }
     }
@@ -1309,7 +1317,7 @@ function nightlyAudit() {
         if (!seen3[rKey]) {
           seen3[rKey] = true;
           var daysLate2 = Math.round((today - rd) / 86400000);
-          overdueReturns.push(name + ' <' + email + '> — ' + libraryKey + ' — ' + itemName + ' — return was due ' + Utilities.formatDate(rd, tz, 'MMM d') + ' (' + daysLate2 + ' day' + (daysLate2 !== 1 ? 's' : '') + ' ago), still "' + status + '"');
+          overdueReturns.push(name + ' <' + email + '> — ' + libraryKey + ' — ' + itemLabel + ' — return was due ' + Utilities.formatDate(rd, tz, 'MMM d') + ' (' + daysLate2 + ' day' + (daysLate2 !== 1 ? 's' : '') + ' ago), still "' + status + '"');
         }
       }
     }
@@ -1332,7 +1340,7 @@ function nightlyAudit() {
     body += '=== DOUBLE BOOKINGS ===\n\n';
     conflicts.forEach(function(c) {
       var worstFmt = c.worstDate ? Utilities.formatDate(c.worstDate, tz, 'MMM d') : '?';
-      body += c.item + ' [' + c.library + '] — ' + c.totalQty + ' available, ' + c.bookedQty + ' needed on ' + worstFmt + ':\n';
+      body += c.item + (c.itemId ? ' [' + c.itemId + ']' : '') + ' [' + c.library + '] — ' + c.totalQty + ' available, ' + c.bookedQty + ' needed on ' + worstFmt + ':\n';
       c.rows.forEach(function(x) {
         var pd = Utilities.formatDate(x.r[10] instanceof Date ? x.r[10] : new Date(x.r[10]), tz, 'MMM d');
         var rd = Utilities.formatDate(x.r[12] instanceof Date ? x.r[12] : new Date(x.r[12]), tz, 'MMM d');
@@ -1377,6 +1385,8 @@ function dailyScheduleEmail() {
   }
   function itemLine(r) {
     var label = String(r[7]).trim();
+    var itemId = String(r[5] || '').trim();
+    if (itemId) label += ' [' + itemId + ']';
     var details = [String(r[6] || '').trim(), String(r[9] || '').trim()].filter(Boolean).join(', ');
     if (details) label += ' (' + details + ')';
     label += ' [' + String(r[0]).trim() + ']';
@@ -1752,7 +1762,7 @@ function auditForDoubleBookings() {
       var conflictKey = libraryKey + '|' + itemName + '|' + overlapping.map(function(y) { return y.rowNum; }).sort().join(',');
       if (!seen[conflictKey]) {
         seen[conflictKey] = true;
-        conflicts.push({ item: itemName, library: libraryKey, totalQty: totalQty, bookedQty: bookedQty, rows: overlapping });
+        conflicts.push({ item: itemName, itemId: itemId, library: libraryKey, totalQty: totalQty, bookedQty: bookedQty, rows: overlapping });
       }
     }
   });
@@ -1762,7 +1772,7 @@ function auditForDoubleBookings() {
   }
   var lines = [conflicts.length + ' double-booking conflict(s) found:\n'];
   conflicts.forEach(function(c) {
-    lines.push(c.item + ' [' + c.library + '] — ' + c.totalQty + ' available, ' + c.bookedQty + ' booked:');
+    lines.push(c.item + (c.itemId ? ' [' + c.itemId + ']' : '') + ' [' + c.library + '] — ' + c.totalQty + ' available, ' + c.bookedQty + ' booked:');
     c.rows.forEach(function(x) {
       var pd = Utilities.formatDate(x.r[10] instanceof Date ? x.r[10] : new Date(x.r[10]), tz, 'MMM d');
       var rd = Utilities.formatDate(x.r[12] instanceof Date ? x.r[12] : new Date(x.r[12]), tz, 'MMM d');

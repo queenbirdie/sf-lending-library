@@ -478,6 +478,25 @@ row's `r[5]` (Item ID column) was already in scope at every one of these
 call sites, just never read. No new data flow was needed anywhere, only
 threading an already-available value one step further.
 
+**Duplicate Item IDs are checked nightly** (2026-10-12, per Lauren — she
+found a couple manually). `findInventoryRow()`'s ID-match branch scans
+the *entire* `inventory` sheet with no per-library scoping (unlike its
+name-match fallback, which does check library) — every lookup that
+resolves by Item ID (availability, qty, image URL, Care Tags, etc.)
+assumes each ID is globally unique across all libraries, not just unique
+within one. If two rows ever share an ID, the first match in sheet order
+silently wins for every one of those lookups — no error, just a wrong
+item's availability/qty quietly answering for both. `nightlyAudit()`
+(`Code.js`) now has a "Duplicate item IDs" section (checked first, before
+double-bookings, since a duplicate ID could itself be *causing* a bogus
+double-booking conflict) that groups `inventory` rows by Item ID and
+reports any ID used by more than one row — included in the same combined
+"all clear" / summary email as the other checks, same dedup-free style
+(no Script Properties key; it just re-scans fresh every run, like the
+double-booking section does). No separate standalone function added for
+manual on-demand checks — `nightlyAudit()` itself can just be run
+directly from the Apps Script editor any time.
+
 ## Deployment
 
 - `assets/`, `layouts/`, `content/`, `data/`, `hugo.toml` → live site,

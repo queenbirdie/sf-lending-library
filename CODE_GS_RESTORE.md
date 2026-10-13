@@ -14,7 +14,7 @@ version → Deploy.**
 ```javascript
 // ==========================================
 // SF LENDING LIBRARY — Google Apps Script
-// v2.0 Unified — Last updated: 2026-10-11 9:24 PM PDT
+// v2.0 Unified — Last updated: 2026-10-12 11:00 PM PDT
 // ==========================================
 
 // ── Tabs ─────────────────────────────────
@@ -1204,6 +1204,23 @@ function nightlyAudit() {
   var tz      = Session.getScriptTimeZone();
   var today   = new Date(); today.setHours(0, 0, 0, 0);
 
+  // --- Duplicate item IDs ---
+  // findInventoryRow() matches by Item ID across the *entire* inventory
+  // sheet with no per-library scoping (unlike its name-match fallback,
+  // which does check library) — every availability/qty/image lookup that
+  // resolves by ID assumes Item ID is globally unique. If two rows share
+  // one, the first match in sheet order silently wins for every lookup,
+  // misrouting availability checks between two unrelated items with no
+  // error. Nothing else would ever surface this, so it's checked here.
+  var dupIds = {};
+  for (var di = 1; di < invRows.length; di++) {
+    var did = String(invRows[di][COL_ITEM_ID] || '').trim();
+    if (!did) continue;
+    if (!dupIds[did]) dupIds[did] = [];
+    dupIds[did].push({ row: di + 1, item: String(invRows[di][COL_ITEM]).trim(), library: String(invRows[di][COL_LIBRARY]).trim() });
+  }
+  var duplicateIds = Object.keys(dupIds).filter(function(id) { return dupIds[id].length > 1; }).sort();
+
   // --- Double bookings ---
   var ACTIVE  = ['Pending', 'Confirmed', 'Lent Out', 'Added to existing request'];
   var active  = rows.map(function(r, i) { return { r: r, rowNum: i + 2 }; })
@@ -1325,18 +1342,31 @@ function nightlyAudit() {
 
   // --- Send combined email ---
   var me = Session.getEffectiveUser().getEmail();
-  if (!conflicts.length && !missing.length && !overduePickups.length && !overdueReturns.length) {
+  if (!duplicateIds.length && !conflicts.length && !missing.length && !overduePickups.length && !overdueReturns.length) {
     GmailApp.sendEmail(me, 'Lending Library: nightly audit — all clear',
-      'No double bookings, no missing calendar invites, no overdue status updates. Nothing to action.');
+      'No duplicate item IDs, no double bookings, no missing calendar invites, no overdue status updates. Nothing to action.');
     return;
   }
   var parts = [];
+  if (duplicateIds.length)  parts.push(duplicateIds.length + ' duplicate item ID(s)');
   if (conflicts.length)      parts.push(conflicts.length + ' double-booking conflict(s)');
   if (missing.length)        parts.push(missing.length + ' missing calendar invite(s)');
   if (overduePickups.length) parts.push(overduePickups.length + ' overdue pickup(s)');
   if (overdueReturns.length) parts.push(overdueReturns.length + ' overdue return(s)');
   var body = '';
+  if (duplicateIds.length) {
+    body += '=== DUPLICATE ITEM IDS ===\n\n';
+    duplicateIds.forEach(function(id) {
+      body += id + ' — used by ' + dupIds[id].length + ' inventory rows:\n';
+      dupIds[id].forEach(function(d) {
+        body += '  • Row ' + d.row + ' — ' + d.item + ' [' + d.library + ']\n';
+      });
+      body += '\n';
+    });
+    body += 'Every Item ID must be unique across the whole inventory sheet — give each duplicate a distinct ID. Until fixed, availability/qty/image lookups for these IDs will silently use whichever row comes first.\n';
+  }
   if (conflicts.length) {
+    if (body) body += '\n';
     body += '=== DOUBLE BOOKINGS ===\n\n';
     conflicts.forEach(function(c) {
       var worstFmt = c.worstDate ? Utilities.formatDate(c.worstDate, tz, 'MMM d') : '?';

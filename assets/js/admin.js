@@ -92,12 +92,13 @@ function groupItems(items) {
 }
 
 function searchTextFor(e) {
-  return [e.name, e.email, e.phone, e.item, e.brand, e.library].filter(Boolean).join(' ').toLowerCase();
+  return [e.name, e.email, e.phone, e.item, e.itemId, e.brand, e.library].filter(Boolean).join(' ').toLowerCase();
 }
 
 function itemLineHtml(e, showAvailability) {
   var details = [e.brand, e.size].filter(Boolean).join(', ');
-  var label = esc(e.item) + (details ? ' (' + esc(details) + ')' : '');
+  var idSpan = e.itemId ? ' <span class="admin-item-id">[' + esc(e.itemId) + ']</span>' : '';
+  var label = esc(e.item) + idSpan + (details ? ' (' + esc(details) + ')' : '');
   var qtyBadge = e.qty > 1 ? ' <span class="admin-qty-badge">\xd7' + e.qty + '</span>' : '';
   var thumb = e.imageUrl ? '<img class="admin-card-thumb" src="' + esc(e.imageUrl) + '" alt="" loading="lazy" onerror="this.remove()">' : '<div class="admin-card-thumb admin-card-thumb-empty"></div>';
   var avail = showAvailability === false ? '' : availabilityBadgeHtml(e.availabilityStatus);
@@ -433,8 +434,9 @@ function renderConflicts(items) {
   if (!items.length) { el.innerHTML = '<div class="admin-empty">No conflicts detected.</div>'; return; }
   el.innerHTML = items.map(function(c) {
     var names = c.rows.map(function(r) { return esc(r.name) + ' (row ' + r.row + ', ' + esc(r.status) + ')'; }).join(', ');
+    var idSpan = c.itemId ? ' <span class="admin-item-id">[' + esc(c.itemId) + ']</span>' : '';
     return '<div class="admin-card conflict">' +
-      '<div class="admin-card-top"><span class="admin-card-name">' + esc(c.item) + '</span><span class="admin-card-lib">' + esc(c.library) + '</span></div>' +
+      '<div class="admin-card-top"><span class="admin-card-name">' + esc(c.item) + idSpan + '</span><span class="admin-card-lib">' + esc(c.library) + '</span></div>' +
       '<div class="admin-card-detail">' + c.bookedQty + ' booked, only ' + c.totalQty + ' available' + (c.worstDate ? ' around ' + esc(c.worstDate) : '') + '<br>' +
       names + '</div></div>';
   }).join('');

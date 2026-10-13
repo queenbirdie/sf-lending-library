@@ -94,6 +94,7 @@ function getAdminData(passcode) {
         email: String(r[3]).trim(),
         phone: String(r[4]).trim(),
         item: String(r[7]).trim(),
+        itemId: itemIdP,
         brand: String(r[6] || '').trim(),
         size: String(r[9] || '').trim(),
         qty: (r[8] && !isNaN(parseInt(r[8]))) ? parseInt(r[8]) : 1,
@@ -121,6 +122,7 @@ function getAdminData(passcode) {
       email: String(r[3]).trim(),
       phone: String(r[4]).trim(),
       item: String(r[7]).trim(),
+      itemId: itemId,
       brand: String(r[6] || '').trim(),
       size: String(r[9] || '').trim(),
       qty: (r[8] && !isNaN(parseInt(r[8]))) ? parseInt(r[8]) : 1,
@@ -230,7 +232,7 @@ function getAdminData(passcode) {
     });
     if (maxQty > totalQty) {
       conflicts.push({
-        item: itemName, library: itemLibs.join(' + '), totalQty: totalQty, bookedQty: maxQty,
+        item: itemName, itemId: xItemId, library: itemLibs.join(' + '), totalQty: totalQty, bookedQty: maxQty,
         worstDate: worstDate ? fmt(worstDate) : null,
         rows: worstRows.map(function(y) { return { row: y.rowNum, name: String(y.r[2]).trim(), status: String(y.r[15]).trim() }; })
       });

@@ -14,7 +14,7 @@ version → Deploy.**
 ```javascript
 // ==========================================
 // SF LENDING LIBRARY — Google Apps Script
-// v2.0 Unified — Last updated: 2026-10-12 11:00 PM PDT
+// v2.0 Unified — Last updated: 2026-10-14 11:43 AM PDT
 // ==========================================
 
 // ── Tabs ─────────────────────────────────
@@ -40,7 +40,7 @@ const LIBRARY_CALENDAR_ID = '3b84343b41b9620d475ad77ea197b879a346a941f44da458fce
 const LIBRARIES = [
   { key: 'kid-gear',  tabAbbr: 'KG', shortName: 'Kid & Travel Gear', name: 'Kid & Travel Gear Lending Library',    address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1ayKDRAZMJdD2cOJDnXVjZa9DGwz0GvOb', maxLoanDays: 21 },
   { key: 'party',     tabAbbr: 'PS', shortName: 'Party Supplies',    name: 'Party Supplies Lending Library',       address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1E8NsGt5WkPcdO1uIovOVZI0LkB06im_4', maxLoanDays: 7 },
-  { key: 'costumes',  tabAbbr: 'KC', shortName: 'Kids\' Costumes',   name: 'Kids\' Costumes Lending Library',      address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1UyprtKkcowekEbnRUvVrGH9oYaMKjuOc', maxLoanDays: 7 },
+  { key: 'costumes',  tabAbbr: 'KC', shortName: 'Kids\' Costumes',   name: 'Kids\' Costumes Lending Library',      address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1UyprtKkcowekEbnRUvVrGH9oYaMKjuOc', maxLoanDays: 21 },
   { key: 'puzzles',   tabAbbr: 'PG', shortName: 'Puzzles & Games',   name: 'Puzzles & Games Lending Library',      address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1--vhQGQEc9WnuKNkPM9YSdrsgd0Pundy', maxLoanDays: 60 },
   { key: 'yoto',      tabAbbr: 'YT', shortName: 'Yoto',              name: 'Yoto Lending Library',                 address: '2722 Folsom St, San Francisco, CA 94110, USA', phone: '917-312-2283', imageFolderId: '1YquLATJiVLGYCQtDWjpOylH79mC8nBnH', maxLoanDays: 21 },
 ];

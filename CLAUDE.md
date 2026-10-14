@@ -378,6 +378,24 @@ rewrite of the rendering approach across the whole file, not a small fix,
 and nothing is currently broken — but worth doing deliberately rather
 than patching the same bug a third time.
 
+**Cancelling/declining prompts for an optional note, appended to column
+Q** (2026-10-14, per Lauren). Both the per-row "Cancel"/"Decline" buttons
+and the group "Cancel all"/"Decline all" bulk button now go through
+`cancelWithNote()`/`bulkCancelWithNote()` (`assets/js/admin.js`) instead
+of calling `updateStatus()`/`bulkUpdateStatus()` directly — a `prompt()`
+asks for a note; clicking its own Cancel button backs out of the whole
+cancellation (nothing is changed), while OK proceeds whether or not any
+text was entered. `updateStatus()`/`bulkUpdateStatus()` gained a trailing
+`note` param (default `''`, so every other status change — Confirm, Mark
+Lent Out, Mark Returned, Lost/Damaged — is unaffected and never prompts).
+On the backend, `applyReservationStatus()` (`Admin.gs`) takes the same
+`note` param and, when non-empty, calls `appendNote(sheet, row, note)` —
+**appends** to whatever's already in column Q (Notes) on a new line
+rather than overwriting it, since that column may already hold a note
+Lauren wrote by hand. For a bulk cancel, the one note typed is appended
+to every row in the batch. No separator/prefix beyond a newline — just
+the note text as typed, stacked under anything already there.
+
 ## Dedicated calendar for pickup/return invites
 
 Invites go to `LIBRARY_CALENDAR_ID` (`Code.js`) — a secondary calendar in

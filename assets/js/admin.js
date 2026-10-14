@@ -236,8 +236,8 @@ function filterAdminSearch(query) {
 
 var ACTION_DEFS = {
   confirm:      { label: 'Confirm',        cls: 'admin-btn-confirm', onclick: function(e) { return 'updateStatus(' + e.row + ',' + e.sortKey + ",'Confirmed',this)"; } },
-  decline:      { label: 'Decline',        cls: 'admin-btn-decline', onclick: function(e) { return 'updateStatus(' + e.row + ',' + e.sortKey + ",'Cancelled',this)"; } },
-  cancel:       { label: 'Cancel',         cls: 'admin-btn-decline', onclick: function(e) { return 'updateStatus(' + e.row + ',' + e.sortKey + ",'Cancelled',this)"; } },
+  decline:      { label: 'Decline',        cls: 'admin-btn-decline', onclick: function(e) { return 'cancelWithNote(' + e.row + ',' + e.sortKey + ",'Cancelled',this)"; } },
+  cancel:       { label: 'Cancel',         cls: 'admin-btn-decline', onclick: function(e) { return 'cancelWithNote(' + e.row + ',' + e.sortKey + ",'Cancelled',this)"; } },
   markLentOut:  { label: 'Mark Lent Out',  cls: 'admin-btn-done',    onclick: function(e) { return 'updateStatus(' + e.row + ',' + e.sortKey + ",'Lent Out',this)"; } },
   markReturned: { label: 'Mark Returned',  cls: 'admin-btn-done',    onclick: function(e) { return 'updateStatus(' + e.row + ',' + e.sortKey + ",'Returned',this)"; } },
   lostDamaged:  { label: 'Lost/Damaged',   cls: 'admin-btn-decline', onclick: function(e) { return 'updateStatus(' + e.row + ',' + e.sortKey + ",'Lost or Damaged',this)"; } },
@@ -340,7 +340,7 @@ function bulkButtonsHtml(group, actions, bulkDef) {
   var secondary = '';
   if (actions.indexOf('cancel') !== -1 || actions.indexOf('decline') !== -1) {
     var cancelLabel = actions.indexOf('decline') !== -1 ? 'Decline all' : 'Cancel all';
-    secondary += '<button class="admin-btn admin-btn-decline" onclick=\'bulkUpdateStatus(' + rowsJson + ',"Cancelled",this,"' + escForSingleQuoteAttr(cancelLabel) + '")\'>' + esc(cancelLabel) + ' (' + group.length + ')</button>';
+    secondary += '<button class="admin-btn admin-btn-decline" onclick=\'bulkCancelWithNote(' + rowsJson + ',"Cancelled",this,"' + escForSingleQuoteAttr(cancelLabel) + '")\'>' + esc(cancelLabel) + ' (' + group.length + ')</button>';
   }
   if (actions.indexOf('revise') !== -1) {
     var groupKey = String(group[0].groupKey || group[0].row);
@@ -456,10 +456,19 @@ function renderPastReservations(listId, countId, items) {
   }).join('');
 }
 
-function updateStatus(row, ts, status, btn) {
+// Prompts for an optional note before cancelling/declining — Cancel on
+// the prompt itself backs out of the cancellation entirely (nothing is
+// changed), rather than proceeding without a note.
+function cancelWithNote(row, ts, status, btn) {
+  var note = prompt('Add a note for this cancellation? (optional — OK with it blank skips adding one)');
+  if (note === null) return;
+  updateStatus(row, ts, status, btn, note);
+}
+
+function updateStatus(row, ts, status, btn, note) {
   btn.disabled = true;
   btn.textContent = 'Saving...';
-  apiPost({ action: 'adminUpdateStatus', passcode: adminPasscode, row: row, ts: ts, status: status }, function(result) {
+  apiPost({ action: 'adminUpdateStatus', passcode: adminPasscode, row: row, ts: ts, status: status, note: note || '' }, function(result) {
     if (result.success) {
       loadAdminData(null, { silent: true });
     } else {
@@ -472,10 +481,16 @@ function updateStatus(row, ts, status, btn) {
   });
 }
 
-function bulkUpdateStatus(rows, status, btn, label) {
+function bulkCancelWithNote(rows, status, btn, label) {
+  var note = prompt('Add a note for this cancellation? (optional — OK with it blank skips adding one)');
+  if (note === null) return;
+  bulkUpdateStatus(rows, status, btn, label, note);
+}
+
+function bulkUpdateStatus(rows, status, btn, label, note) {
   btn.disabled = true;
   btn.textContent = 'Saving...';
-  apiPost({ action: 'adminBatchUpdateStatus', passcode: adminPasscode, rows: rows, status: status }, function(result) {
+  apiPost({ action: 'adminBatchUpdateStatus', passcode: adminPasscode, rows: rows, status: status, note: note || '' }, function(result) {
     if (result.success) {
       loadAdminData(null, { silent: true });
     } else {

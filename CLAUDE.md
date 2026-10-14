@@ -396,6 +396,33 @@ Lauren wrote by hand. For a bulk cancel, the one note typed is appended
 to every row in the batch. No separator/prefix beyond a newline — just
 the note text as typed, stacked under anything already there.
 
+**Cancelling the *entire* reservation also deletes its calendar invite —
+cancelling one item within a multi-item reservation deliberately does
+not** (2026-10-15, per Lauren's explicit distinction). After
+`applyReservationStatus()` writes a `'Cancelled'` status,
+`adminUpdateStatus()`/`adminBatchUpdateStatus()` call
+`maybeDeleteInviteIfFullyCancelled(sheet, row, tz)`, which uses a new
+`findReservationGroupRows()` helper (same library+email+pickup/return-
+dates+original-timestamp grouping key as `maybeSendCombinedConfirmation()`
+and `adminReviseReservation()`'s sibling auto-discovery — see "Revising a
+multi-item reservation" above) to look at *every* item in that original
+reservation, not just the row(s) just cancelled. If any sibling is still
+in an active status (`Pending`/`Confirmed`/`Lent Out`/`Added to existing
+request`), the reservation isn't fully cancelled yet — e.g. cancelling one
+item via its per-item "Cancel"/"Decline" button while its siblings stay
+Confirmed — so the shared invite (which still covers those active
+items) is deliberately left alone. Only when **no** sibling is still
+active (every one is now `Cancelled` or `Lost or Damaged` — a true
+single-item reservation counts too, since it has no siblings to begin
+with) does it delete the invite, via a new shared `deleteInviteEvents()`
+helper (factored out of `adminReviseReservation()`'s existing old-invite
+cleanup, which now calls the same helper — identical behavior, no longer
+duplicated). For the bulk "Cancel all"/"Decline all" path, this check
+runs once per distinct reservation group *after* every row in the batch
+has already been written — not interleaved into the per-row write loop,
+which would see not-yet-processed siblings as still active and skip the
+deletion even on a full cancel-all.
+
 ## Dedicated calendar for pickup/return invites
 
 Invites go to `LIBRARY_CALENDAR_ID` (`Code.js`) — a secondary calendar in

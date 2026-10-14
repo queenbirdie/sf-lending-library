@@ -201,9 +201,9 @@ path for Lauren, not public self-service booking.
 
 Each library in `LIBRARIES` (`Code.js`) has a `maxLoanDays` capping how
 long an item may be checked out (`returnDate - pickupDate`). Current
-values: Kid & Travel Gear 21, Party Supplies 7, Kids' Costumes 7, Puzzles
-& Games 60, Yoto 21. Enforced in the same three-places pattern as booking
-lead time:
+values: Kid & Travel Gear 21, Party Supplies 7, Kids' Costumes 21 (raised
+from 7, 2026-10-14, per Lauren), Puzzles & Games 60, Yoto 21. Enforced in
+the same three-places pattern as booking lead time:
 - `Code.js` `getAvailabilityData()` includes `maxLoanDays` in the
   `availability` API response so the frontend knows the current library's
   cap.

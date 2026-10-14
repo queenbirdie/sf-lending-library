@@ -266,8 +266,19 @@ function verifyRowTimestamp(sheet, row, ts) {
   return actualMs === parseInt(ts);
 }
 
-function applyReservationStatus(sheet, row, newStatus, today) {
+// Appends to column Q (Notes, 17) rather than overwriting — any note a
+// row already carries (manually written, or from an earlier cancellation)
+// is kept, with the new note added on its own line after it.
+function appendNote(sheet, row, note) {
+  if (!note) return;
+  var cell = sheet.getRange(row, 17); // Q: Notes
+  var existing = String(cell.getValue() || '').trim();
+  cell.setValue(existing ? existing + '\n' + note : note);
+}
+
+function applyReservationStatus(sheet, row, newStatus, today, note) {
   sheet.getRange(row, RSVP_STATUS_COL).setValue(newStatus);
+  if (note) appendNote(sheet, row, note);
   if (newStatus === 'Returned') {
     var returnDateCell = sheet.getRange(row, 13).getValue(); // M: Return Date
     sheet.getRange(row, 18).setValue(today); // R: Actual Return Date
@@ -293,7 +304,7 @@ function adminUpdateStatus(formData) {
     return { success: false, message: 'This reservation may have moved — please refresh the dashboard and try again.' };
   }
   var today = new Date(); today.setHours(0, 0, 0, 0);
-  applyReservationStatus(sheet, row, newStatus, today);
+  applyReservationStatus(sheet, row, newStatus, today, String(formData.note || '').trim());
   return { success: true };
 }
 
@@ -316,7 +327,8 @@ function adminBatchUpdateStatus(formData) {
     return { success: false, message: 'One or more of these reservations may have moved — please refresh the dashboard and try again.' };
   }
   var today = new Date(); today.setHours(0, 0, 0, 0);
-  entries.forEach(function(e) { applyReservationStatus(sheet, e.row, newStatus, today); });
+  var note = String(formData.note || '').trim();
+  entries.forEach(function(e) { applyReservationStatus(sheet, e.row, newStatus, today, note); });
   return { success: true };
 }
 

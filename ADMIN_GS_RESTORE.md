@@ -291,6 +291,80 @@ function applyReservationStatus(sheet, row, newStatus, today, note) {
   }
 }
 
+// Deletes the pickup/return calendar invite for a reservation, checking
+// both LIBRARY_CALENDAR_ID and the personal default calendar since an
+// older reservation's invite might predate the calendar split (same
+// two-calendar principle as findInviteEvents() in Code.js). Best-effort —
+// swallows failures rather than blocking the status write that triggered
+// it, same as adminReviseReservation()'s existing invite cleanup (which
+// this factors out, to share with the cancellation flow below).
+function deleteInviteEvents(libraryKey, firstName, pickupDate, returnDate, logContext) {
+  try {
+    var lib = getLibrary(libraryKey);
+    var libNameClean = lib.name.replace(/'/g, '');
+    var cals = [CalendarApp.getCalendarById(LIBRARY_CALENDAR_ID), CalendarApp.getDefaultCalendar()];
+    if (pickupDate) {
+      var pStart = new Date(pickupDate); pStart.setHours(0, 0, 0, 0);
+      var pEnd = new Date(pickupDate); pEnd.setHours(23, 59, 59, 999);
+      cals.forEach(function(cal) { cal.getEvents(pStart, pEnd, { search: firstName + ' <> ' + libNameClean + ' Pickup' }).forEach(function(ev) { ev.deleteEvent(); }); });
+    }
+    if (returnDate) {
+      var rStart = new Date(returnDate); rStart.setHours(0, 0, 0, 0);
+      var rEnd = new Date(returnDate); rEnd.setHours(23, 59, 59, 999);
+      cals.forEach(function(cal) { cal.getEvents(rStart, rEnd, { search: firstName + ' <> ' + libNameClean + ' Return' }).forEach(function(ev) { ev.deleteEvent(); }); });
+    }
+  } catch (e) { Logger.log('Calendar cleanup failed' + (logContext ? ' (' + logContext + ')' : '') + ': ' + e.message); }
+}
+
+// Every row sharing the same original reservation as `row` (same library
+// + email + current pickup/return dates + original submission timestamp
+// — the same grouping key maybeSendCombinedConfirmation() and
+// adminReviseReservation()'s sibling auto-discovery use), including
+// `row` itself. Reads live from the sheet rather than any cached copy,
+// since this is used right after a status write to see the just-updated
+// value.
+function findReservationGroupRows(sheet, row, allRsvpRows, tz) {
+  var data = sheet.getRange(row, 1, 1, 19).getValues()[0];
+  var email = String(data[3]).trim();
+  var libraryKey = String(data[0]).trim();
+  var pickupFmt = data[10] instanceof Date ? Utilities.formatDate(data[10], tz, 'yyyy-MM-dd') : String(data[10]);
+  var returnFmt = data[12] instanceof Date ? Utilities.formatDate(data[12], tz, 'yyyy-MM-dd') : String(data[12]);
+  var tsFmt = data[1] instanceof Date ? Utilities.formatDate(data[1], tz, 'yyyy-MM-dd HH:mm:ss') : String(data[1]);
+  var group = [];
+  for (var i = 0; i < allRsvpRows.length; i++) {
+    var r = allRsvpRows[i];
+    if (String(r[0]).trim() !== libraryKey || String(r[3]).trim() !== email) continue;
+    var rPickupFmt = r[10] instanceof Date ? Utilities.formatDate(r[10], tz, 'yyyy-MM-dd') : String(r[10]);
+    var rReturnFmt = r[12] instanceof Date ? Utilities.formatDate(r[12], tz, 'yyyy-MM-dd') : String(r[12]);
+    var rTsFmt = r[1] instanceof Date ? Utilities.formatDate(r[1], tz, 'yyyy-MM-dd HH:mm:ss') : String(r[1]);
+    if (rPickupFmt === pickupFmt && rReturnFmt === returnFmt && rTsFmt === tsFmt) {
+      group.push({ row: i + 2, data: r });
+    }
+  }
+  return group;
+}
+
+// After a row is marked Cancelled, checks whether every item in its
+// original reservation is now in a terminal status (Cancelled or Lost or
+// Damaged) — i.e. nothing active is left for the borrower to actually
+// show up for. Only then is this reservation "complete reservation
+// cancelled" rather than "one item within a multi-item reservation
+// cancelled" — per Lauren's request (2026-10-15), the calendar invite is
+// only auto-deleted in the former case. A single still-active sibling
+// means this was a partial cancellation, so the shared invite (which
+// still covers that sibling) is deliberately left alone.
+function maybeDeleteInviteIfFullyCancelled(sheet, row, tz) {
+  var allRsvpRows = sheet.getDataRange().getValues().slice(1);
+  var group = findReservationGroupRows(sheet, row, allRsvpRows, tz);
+  var ACTIVE = ['Pending', 'Confirmed', 'Lent Out', 'Added to existing request'];
+  var stillActive = group.some(function(g) { return ACTIVE.indexOf(String(g.data[15]).trim()) !== -1; });
+  if (stillActive) return;
+  var first = group[0].data;
+  var libraryKey = String(first[0]).trim();
+  var firstName = String(first[2]).trim().split(' ')[0];
+  deleteInviteEvents(libraryKey, firstName, first[10], first[12], 'cancel');
+}
+
 function adminUpdateStatus(formData) {
   if (!checkAdminPasscode(formData.passcode)) return { success: false, message: 'Invalid passcode.' };
   var row = parseInt(formData.row);
@@ -305,6 +379,9 @@ function adminUpdateStatus(formData) {
   }
   var today = new Date(); today.setHours(0, 0, 0, 0);
   applyReservationStatus(sheet, row, newStatus, today, String(formData.note || '').trim());
+  if (newStatus === 'Cancelled') {
+    maybeDeleteInviteIfFullyCancelled(sheet, row, Session.getScriptTimeZone());
+  }
   return { success: true };
 }
 
@@ -329,6 +406,21 @@ function adminBatchUpdateStatus(formData) {
   var today = new Date(); today.setHours(0, 0, 0, 0);
   var note = String(formData.note || '').trim();
   entries.forEach(function(e) { applyReservationStatus(sheet, e.row, newStatus, today, note); });
+  if (newStatus === 'Cancelled') {
+    // All rows are already written above — check each distinct reservation
+    // group once now that every row's post-write status is in the sheet,
+    // rather than per-row during the write loop (which would see sibling
+    // rows still in their pre-cancel status until the loop reaches them).
+    var tz = Session.getScriptTimeZone();
+    var checkedGroups = {};
+    entries.forEach(function(e) {
+      var data = sheet.getRange(e.row, 1, 1, 19).getValues()[0];
+      var key = String(data[0]).trim() + '|' + String(data[3]).trim() + '|' + (data[1] instanceof Date ? data[1].getTime() : String(data[1]));
+      if (checkedGroups[key]) return;
+      checkedGroups[key] = true;
+      maybeDeleteInviteIfFullyCancelled(sheet, e.row, tz);
+    });
+  }
   return { success: true };
 }
 
@@ -444,24 +536,7 @@ function adminReviseReservation(formData) {
   // delete the old ones before writing new dates so stale invites don't linger.
   var hadInvites = rowInfos.some(function(r) { return r.status === 'Confirmed' || r.status === 'Lent Out' || r.status === 'Added to existing request'; });
   if (hadInvites) {
-    try {
-      // Check both calendars — the old invite lives on LIBRARY_CALENDAR_ID
-      // if it was created after that calendar was introduced, or still on
-      // the personal default calendar if this reservation predates it.
-      var cals = [CalendarApp.getCalendarById(LIBRARY_CALENDAR_ID), CalendarApp.getDefaultCalendar()];
-      var lib = getLibrary(libraryKey);
-      var libNameClean = lib.name.replace(/'/g, '');
-      if (oldPickupDate) {
-        var pStart = new Date(oldPickupDate); pStart.setHours(0, 0, 0, 0);
-        var pEnd = new Date(oldPickupDate); pEnd.setHours(23, 59, 59, 999);
-        cals.forEach(function(cal) { cal.getEvents(pStart, pEnd, { search: firstName + ' <> ' + libNameClean + ' Pickup' }).forEach(function(ev) { ev.deleteEvent(); }); });
-      }
-      if (oldReturnDate) {
-        var rStart = new Date(oldReturnDate); rStart.setHours(0, 0, 0, 0);
-        var rEnd = new Date(oldReturnDate); rEnd.setHours(23, 59, 59, 999);
-        cals.forEach(function(cal) { cal.getEvents(rStart, rEnd, { search: firstName + ' <> ' + libNameClean + ' Return' }).forEach(function(ev) { ev.deleteEvent(); }); });
-      }
-    } catch (e) { Logger.log('Calendar cleanup failed during revise: ' + e.message); }
+    deleteInviteEvents(libraryKey, firstName, oldPickupDate, oldReturnDate, 'revise');
   }
 
   // Write the new values for every row in this batch.

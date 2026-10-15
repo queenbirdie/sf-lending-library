@@ -98,11 +98,11 @@ function searchTextFor(e) {
 function itemLineHtml(e, showAvailability) {
   var details = [e.brand, e.size].filter(Boolean).join(', ');
   var idSpan = e.itemId ? ' <span class="admin-item-id">[' + esc(e.itemId) + ']</span>' : '';
-  var label = esc(e.item) + idSpan + (details ? ' (' + esc(details) + ')' : '');
+  var label = esc(e.item) + (details ? ' (' + esc(details) + ')' : '');
   var qtyBadge = e.qty > 1 ? ' <span class="admin-qty-badge">\xd7' + e.qty + '</span>' : '';
   var thumb = e.imageUrl ? '<img class="admin-card-thumb" src="' + esc(e.imageUrl) + '" alt="" loading="lazy" onerror="this.remove()">' : '<div class="admin-card-thumb admin-card-thumb-empty"></div>';
   var avail = showAvailability === false ? '' : availabilityBadgeHtml(e.availabilityStatus);
-  return '<div class="admin-item-row">' + thumb + '<div class="admin-item-text">' + label + qtyBadge + (avail ? '<br>' + avail : '') + '</div></div>';
+  return '<div class="admin-item-row">' + thumb + '<div class="admin-item-text">' + label + qtyBadge + idSpan + (avail ? '<br>' + avail : '') + '</div></div>';
 }
 
 function availabilityBadgeHtml(status) {

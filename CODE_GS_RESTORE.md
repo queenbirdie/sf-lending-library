@@ -14,7 +14,7 @@ version → Deploy.**
 ```javascript
 // ==========================================
 // SF LENDING LIBRARY — Google Apps Script
-// v2.0 Unified — Last updated: 2026-10-14 11:43 AM PDT
+// v2.0 Unified — Last updated: 2026-10-14 5:06 PM PDT
 // ==========================================
 
 // ── Tabs ─────────────────────────────────
@@ -517,10 +517,10 @@ function sendReceiptEmail(data, items, libraryKey) {
   function itemLabel(i) {
     if (typeof i !== 'object') return String(i);
     var label = i.name;
-    if (i.id) label += ' [' + i.id + ']';
     var details = [i.brand, i.size].filter(Boolean).join(', ');
     if (details) label += ' (' + details + ')';
     if (i.qty > 1) label += ' x' + i.qty;
+    if (i.id) label += ' [' + i.id + ']';
     return label;
   }
   var itemList = items.map(function(i) { return '- ' + itemLabel(i); }).join('\n');
@@ -726,11 +726,11 @@ function sendPickupReminders() {
   function itemLabel(r) {
     var qty = parseInt(r[8]); if (isNaN(qty) || qty < 1) qty = 1;
     var label = String(r[7]).trim();
-    var itemId = String(r[5] || '').trim();
-    if (itemId) label += ' [' + itemId + ']';
     var details = [String(r[6] || '').trim(), String(r[9] || '').trim()].filter(Boolean).join(', ');
     if (details) label += ' (' + details + ')';
     if (qty > 1) label += ' x' + qty;
+    var itemId = String(r[5] || '').trim();
+    if (itemId) label += ' [' + itemId + ']';
     return label;
   }
   // Group by borrower + library + pickup time so one email covers all their items
@@ -779,11 +779,11 @@ function sendReturnReminders() {
   function itemLabel(r) {
     var qty = parseInt(r[8]); if (isNaN(qty) || qty < 1) qty = 1;
     var label = String(r[7]).trim();
-    var itemId = String(r[5] || '').trim();
-    if (itemId) label += ' [' + itemId + ']';
     var details = [String(r[6] || '').trim(), String(r[9] || '').trim()].filter(Boolean).join(', ');
     if (details) label += ' (' + details + ')';
     if (qty > 1) label += ' x' + qty;
+    var itemId = String(r[5] || '').trim();
+    if (itemId) label += ' [' + itemId + ']';
     return label;
   }
   // Group by borrower + library + return time so one email covers all their
@@ -1021,10 +1021,10 @@ function sendCalendarInvites(data, items, libraryKey) {
   function itemLabel(i) {
     if (typeof i !== 'object') return String(i);
     var label = i.name;
-    if (i.id) label += ' [' + i.id + ']';
     var details = [i.brand, i.size].filter(Boolean).join(', ');
     if (details) label += ' (' + details + ')';
     if (i.qty > 1) label += ' x' + i.qty;
+    if (i.id) label += ' [' + i.id + ']';
     return label;
   }
   var itemList = items.map(function(i) { return '- ' + itemLabel(i); }).join('\n');
@@ -1034,7 +1034,7 @@ function sendCalendarInvites(data, items, libraryKey) {
   var returnEnd   = new Date(returnStart.getTime() + 60 * 60 * 1000);
   var multiUnit = items.filter(function(i) { return typeof i === 'object' && i.qty > 1; });
   var multiUnitBanner = multiUnit.length
-    ? '⚠️ MULTIPLE UNITS: ' + multiUnit.map(function(i) { return i.name + (i.id ? ' [' + i.id + ']' : '') + ' x' + i.qty; }).join(', ') + '\n\n'
+    ? '⚠️ MULTIPLE UNITS: ' + multiUnit.map(function(i) { return i.name + ' x' + i.qty + (i.id ? ' [' + i.id + ']' : ''); }).join(', ') + '\n\n'
     : '';
   var tz = Session.getScriptTimeZone();
   var pickupFmt = Utilities.formatDate(new Date(pickupDate), tz, 'EEE, MMM d');
@@ -1415,11 +1415,11 @@ function dailyScheduleEmail() {
   }
   function itemLine(r) {
     var label = String(r[7]).trim();
-    var itemId = String(r[5] || '').trim();
-    if (itemId) label += ' [' + itemId + ']';
     var details = [String(r[6] || '').trim(), String(r[9] || '').trim()].filter(Boolean).join(', ');
     if (details) label += ' (' + details + ')';
-    label += ' [' + String(r[0]).trim() + ']';
+    var itemId = String(r[5] || '').trim();
+    if (itemId) label += ' [' + itemId + ']';
+    label += ' [' + String(r[0]).trim() + ']'; // library, always last
     return label;
   }
   // Group rows by borrower (email + library + time), expanding qty into individual lines

@@ -396,6 +396,33 @@ Lauren wrote by hand. For a bulk cancel, the one note typed is appended
 to every row in the batch. No separator/prefix beyond a newline — just
 the note text as typed, stacked under anything already there.
 
+**Cancelling the *entire* reservation also deletes its calendar invite —
+cancelling one item within a multi-item reservation deliberately does
+not** (2026-10-15, per Lauren's explicit distinction). After
+`applyReservationStatus()` writes a `'Cancelled'` status,
+`adminUpdateStatus()`/`adminBatchUpdateStatus()` call
+`maybeDeleteInviteIfFullyCancelled(sheet, row, tz)`, which uses a new
+`findReservationGroupRows()` helper (same library+email+pickup/return-
+dates+original-timestamp grouping key as `maybeSendCombinedConfirmation()`
+and `adminReviseReservation()`'s sibling auto-discovery — see "Revising a
+multi-item reservation" above) to look at *every* item in that original
+reservation, not just the row(s) just cancelled. If any sibling is still
+in an active status (`Pending`/`Confirmed`/`Lent Out`/`Added to existing
+request`), the reservation isn't fully cancelled yet — e.g. cancelling one
+item via its per-item "Cancel"/"Decline" button while its siblings stay
+Confirmed — so the shared invite (which still covers those active
+items) is deliberately left alone. Only when **no** sibling is still
+active (every one is now `Cancelled` or `Lost or Damaged` — a true
+single-item reservation counts too, since it has no siblings to begin
+with) does it delete the invite, via a new shared `deleteInviteEvents()`
+helper (factored out of `adminReviseReservation()`'s existing old-invite
+cleanup, which now calls the same helper — identical behavior, no longer
+duplicated). For the bulk "Cancel all"/"Decline all" path, this check
+runs once per distinct reservation group *after* every row in the batch
+has already been written — not interleaved into the per-row write loop,
+which would see not-yet-processed siblings as still active and skip the
+deletion even on a full cancel-all.
+
 ## Dedicated calendar for pickup/return invites
 
 Invites go to `LIBRARY_CALENDAR_ID` (`Code.js`) — a secondary calendar in
@@ -514,6 +541,56 @@ reports any ID used by more than one row — included in the same combined
 double-booking section does). No separate standalone function added for
 manual on-demand checks — `nightlyAudit()` itself can just be run
 directly from the Apps Script editor any time.
+
+**Already-returned items do not get a return reminder — this was already
+true, not a gap** (checked 2026-10-15, after a report that Sandy Chang got
+a return reminder for an item — Dog Lover's puzzle, `AP-235` — she'd
+already returned). `sendReturnReminders()`'s row filter (`if (status !==
+'Lent Out' && status !== 'Added to existing request') return;`) already
+excludes any row whose Status is `Returned` (or `Cancelled`/`Lost or
+Damaged`) at the moment each run fires, reading the sheet fresh on every
+8am/4pm run — so a row marked `Returned` before a run never enters that
+run's reminder groups. Confirmed with Lauren that no such incorrect email
+actually went out this time; she hadn't realized the exclusion was already
+in place. If this resurfaces, the first thing to check is **timing**, not
+the filter logic: the gap would be the window between physically
+receiving an item back and marking it `Returned` in the sheet — if a
+reminder run falls inside that window, it correctly reflects what the
+sheet said at that moment (`Lent Out`), even though the item was already
+back in hand. That's a data-entry-lag question, not something
+`sendReturnReminders()` itself can detect.
+
+## Item ID position in item strings — moved to the end everywhere
+
+(2026-10-14/15, per Lauren's request.) Every `[ItemID]` tag added by the
+"Item ID shown next to the item name" work above originally sat
+immediately after the item name, before the brand/size parenthetical and
+quantity (`Dog Lover's [AP-235] (Ridley's, 500 pcs)`). Moved to the end of
+the item string instead (`Dog Lover's (Ridley's, 500 pcs) [AP-235]`), so
+the item's own description reads naturally first and the ID reads as a
+trailing cross-reference tag. Changed in every `itemLabel`/`itemLine`
+helper that builds `name (details) [id]`-shaped strings:
+- `Code.js` `sendPickupReminders()` and `sendReturnReminders()`'s local
+  `itemLabel(r)` — now `name (details) xQty [id]`.
+- `Code.js` `sendReceiptEmail()` and `sendCalendarInvites()`'s shared
+  local `itemLabel(i)` — same new order.
+- `Code.js` `sendCalendarInvites()`'s `multiUnitBanner` — now `name xQty
+  [id]`.
+- `Code.js` `dailyScheduleEmail()`'s local `itemLine(r)` — now `name
+  (details) [id] [library]`; the trailing `[library]` tag is a different
+  kind of suffix (which library, not part of the item's own description)
+  and deliberately stays last, same as before.
+- `assets/js/admin.js` `itemLineHtml()` — now `name (details)
+  <qty badge> [id]`; the ID tag moved past the quantity badge, to the
+  true end of the rendered line.
+
+**Deliberately left unchanged**: `nightlyAudit()`'s double-booking line
+and overdue-pickup/return `itemLabel`, `auditForDoubleBookings()`, and
+`admin.js` `renderConflicts()`'s `idSpan`. All four build their label from
+just the item name with no brand/size details ever mixed in (`c.item` /
+`itemName` alone) — the ID tag was already the last thing adjacent to the
+name before any trailing `[library]` tag, so "move it past the details"
+has no actual effect on these; nothing to change.
 
 ## Deployment
 

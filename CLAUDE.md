@@ -592,6 +592,35 @@ just the item name with no brand/size details ever mixed in (`c.item` /
 name before any trailing `[library]` tag, so "move it past the details"
 has no actual effect on these; nothing to change.
 
+## Item categories are free-text per item — no code change needed to add one
+
+`item.category` (what groups items into sections and filter chips on a
+library page, `assets/js/library.js` `buildFilters()`/`renderItems()`) is
+read straight from the `inventory` sheet's Category column (C,
+`COL_CATEGORY` in `Code.js`) with no enum/validation gating it anywhere
+in `Code.js` or `Admin.gs` — whatever string is in that cell becomes a
+category. So adding a new category to a library is purely a Google Sheet
+edit (tag items with the new category text), not a code change. The only
+code-side piece is `CAT_ORDER` in `library.js` — a single list, shared
+across every library's page since they all load the same JS, that
+controls **display order**; any category not in it just sorts after
+everything that is (`indexOf(...) === -1` falls back to `999`).
+
+**Kids' Costumes — added `'Adult'` to `CAT_ORDER`** (2026-10-16, per
+Lauren). She has exactly one adult costume so far and didn't want a full
+"Adult Costumes" rebrand of the library yet (it's titled "Kids'
+Costumes" everywhere — nav, page title, emails, calendar invites) —
+asked about that explicitly and she said to leave the branding alone for
+now and revisit once she has more adult inventory. Instead this follows
+the library's existing pattern of size/age-based categories (`'Baby &
+Infant (0–18 mo)'`, `'Toddler (2T–4T)'`, `'Little Kids (4–6 / Size S)'`,
+`'Big Kids (7–12 / Size M–L)'`) — `'Adult'` was added right after `'Big
+Kids...'` so it sorts last. **One remaining manual step**: set that
+costume's Category cell (column C) in the `inventory` sheet to `Adult`
+— nothing shows up until that's done. Frontend-only change
+(`assets/js/library.js`), so it ships via the normal Hugo
+auto-deploy-on-push-to-`main` — no Apps Script paste/redeploy involved.
+
 ## Deployment
 
 - `assets/`, `layouts/`, `content/`, `data/`, `hugo.toml` → live site,

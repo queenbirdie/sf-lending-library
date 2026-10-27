@@ -18,7 +18,8 @@ var CAT_ORDER = [
   'Baby & Infant (0–18 mo)',
   'Toddler (2T–4T)',
   'Little Kids (4–6 / Size S)',
-  'Big Kids (7–12 / Size M–L)'
+  'Big Kids (7–12 / Size M–L)',
+  'Adult'
 ];
 
 apiGet({ action: 'availability', lib: libraryKey }, init, function() {

@@ -592,6 +592,92 @@ just the item name with no brand/size details ever mixed in (`c.item` /
 name before any trailing `[library]` tag, so "move it past the details"
 has no actual effect on these; nothing to change.
 
+## Item categories are free-text per item — no code change needed to add one
+
+`item.category` (what groups items into sections and filter chips on a
+library page, `assets/js/library.js` `buildFilters()`/`renderItems()`) is
+read straight from the `inventory` sheet's Category column (C,
+`COL_CATEGORY` in `Code.js`) with no enum/validation gating it anywhere
+in `Code.js` or `Admin.gs` — whatever string is in that cell becomes a
+category. So adding a new category to a library is purely a Google Sheet
+edit (tag items with the new category text), not a code change. The only
+code-side piece is `CAT_ORDER` in `library.js` — a single list, shared
+across every library's page since they all load the same JS, that
+controls **display order**; any category not in it just sorts after
+everything that is (`indexOf(...) === -1` falls back to `999`).
+
+**Kids' Costumes — added `'Adult'` to `CAT_ORDER`** (2026-10-16, per
+Lauren). She has exactly one adult costume so far and didn't want a full
+"Adult Costumes" rebrand of the library yet (it's titled "Kids'
+Costumes" everywhere — nav, page title, emails, calendar invites) —
+asked about that explicitly and she said to leave the branding alone for
+now and revisit once she has more adult inventory. Instead this follows
+the library's existing pattern of size/age-based categories (`'Baby &
+Infant (0–18 mo)'`, `'Toddler (2T–4T)'`, `'Little Kids (4–6 / Size S)'`,
+`'Big Kids (7–12 / Size M–L)'`) — `'Adult'` was added right after `'Big
+Kids...'` so it sorts last. **One remaining manual step**: set that
+costume's Category cell (column C) in the `inventory` sheet to `Adult`
+— nothing shows up until that's done. Frontend-only change
+(`assets/js/library.js`), so it ships via the normal Hugo
+auto-deploy-on-push-to-`main` — no Apps Script paste/redeploy involved.
+
+## Calendar invites can go permanently missing — stuck dedup keys, not a calendar-access problem
+
+(2026-10-27, reported by Lauren via a nightly-audit screenshot showing ~19
+reservations across every library missing calendar invites, spanning
+Oct 26 through Feb 1.) Root cause: `maybeSendCombinedConfirmation()` and
+`sendPendingInvites()` both mark their Script Properties dedup key
+(`'sent_' + ...`) **before** attempting `sendCalendarInvites()`, not
+after a successful send — unlike `sendPendingReceipts()`'s `'receipt_'`
+key, which is correctly set only after `sendReceiptEmail()` succeeds.
+The mark-before-send pattern exists to stop `sendPendingInvites()`'s
+every-few-minutes retry and an edit-triggered
+`maybeSendCombinedConfirmation()` from racing each other into a double
+send — but it means if the actual send fails in a way that isn't a clean
+JS exception (a mid-execution timeout, a burst of Calendar API
+rate-limiting, etc.), or fails the same catchable way on every single
+retry, the key stays marked "sent" forever with no invite ever created,
+and the only trace was a `Logger.log()` call nobody was looking at.
+Confirmed against a real case: `testLibraryCalendarInvite()` succeeded
+(ruling out `LIBRARY_CALENDAR_ID` access/permissions as the cause), but
+Lauren confirmed a plain single-item `Confirmed` reservation (Julia Lee,
+`costumes`) had no invite on the calendar at all — not an audit false
+positive, a genuinely un-sent one.
+
+**Two changes**, both in `Code.js`:
+- **`alertInviteFailureOnce()`** — new shared helper, called from both
+  `maybeSendCombinedConfirmation()`'s and `sendPendingInvites()`'s catch
+  blocks. Emails Lauren directly the first time a given reservation's
+  invite fails, instead of only `Logger.log()`. Deliberately *not* an
+  email on every retry — `sendPendingInvites()` retries every few
+  minutes, so a persistently-failing reservation would otherwise spam
+  her inbox once per cycle. Dedup'd via its own
+  `'inviteFailAlert_' + sentKey` property, cleared on the next
+  successful send so a reservation that fails, recovers, then later
+  fails again for an unrelated reason still alerts.
+- **`recoverMissingInvites()`** — new function for manual recovery, and
+  what both `auditCalendarInvites()`'s and `nightlyAudit()`'s
+  missing-invite emails now point to (replacing the old
+  `clearScriptProperties()` + `sendPendingInvites()` advice). Re-checks
+  both calendars via `findInviteEvents()` for every Confirmed/Lent
+  Out/Added-to-existing-request reservation *before* touching anything,
+  so it only clears the stuck `'sent_'` key for a reservation it has
+  independently confirmed is actually missing an invite right now, then
+  re-runs `sendPendingInvites()` to retry just those. Safe to run any
+  time, unlike a blanket `clearScriptProperties()` — that wipes *every*
+  dedup key, including the current day's `'pickupReminder_'`/
+  `'returnReminder_'`/`'receipt_'` keys, risking duplicate reminder and
+  receipt emails if run after any of those have already gone out that
+  day. `clearScriptProperties()` itself is untouched (still useful for
+  truly wiping state), just no longer the first thing anyone's pointed
+  at for this specific problem.
+
+Not fixed (and probably can't be, fully, in Apps Script): the
+mark-before-send pattern itself still has a theoretical gap if a send is
+interrupted in a way that skips the `catch` block entirely (a hard
+execution-governor kill mid-call). `recoverMissingInvites()` is the
+mitigation for when that happens again, not a guarantee it can't.
+
 ## Deployment
 
 - `assets/`, `layouts/`, `content/`, `data/`, `hugo.toml` → live site,

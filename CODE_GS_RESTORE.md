@@ -14,7 +14,7 @@ version → Deploy.**
 ```javascript
 // ==========================================
 // SF LENDING LIBRARY — Google Apps Script
-// v2.0 Unified — Last updated: 2026-10-14 5:06 PM PDT
+// v2.0 Unified — Last updated: 2026-10-27 9:37 AM PDT
 // ==========================================
 
 // ── Tabs ─────────────────────────────────
@@ -989,10 +989,30 @@ function maybeSendCombinedConfirmation(row) {
   } finally { lock.releaseLock(); }
   try {
     sendCalendarInvites(data, confirmedItems, libraryKey);
+    PropertiesService.getScriptProperties().deleteProperty('inviteFailAlert_' + sentKey);
   } catch(e) {
     PropertiesService.getScriptProperties().deleteProperty(sentKey);
     Logger.log('Calendar invite failed for ' + sentKey + ': ' + e.message);
+    alertInviteFailureOnce(sentKey, email, libraryKey, pickupFmt, returnFmt, e.message);
   }
+}
+
+// Emails Lauren the first time a given reservation's calendar invite fails
+// to send — not on every retry, since sendPendingInvites() re-attempts every
+// few minutes and a persistently-failing reservation would otherwise spam
+// her inbox once per cycle. The 'inviteFailAlert_' flag is cleared on the
+// next successful send (see maybeSendCombinedConfirmation()/
+// sendPendingInvites()), so a reservation that fails, gets fixed, then
+// later fails again for an unrelated reason will still alert.
+function alertInviteFailureOnce(sentKey, email, libraryKey, pickupFmt, returnFmt, errMessage) {
+  var props = PropertiesService.getScriptProperties();
+  var alertKey = 'inviteFailAlert_' + sentKey;
+  if (props.getProperty(alertKey)) return;
+  props.setProperty(alertKey, 'true');
+  GmailApp.sendEmail(Session.getEffectiveUser().getEmail(), 'Lending Library: a calendar invite failed to send',
+    'Failed to create a calendar invite for ' + email + ' (' + libraryKey + ', pickup ' + pickupFmt + ', return ' + returnFmt + ').\n\n' +
+    'Error: ' + errMessage + '\n\n' +
+    'sendPendingInvites() retries every few minutes, so this may resolve on its own. If it\'s still missing later, run recoverMissingInvites() from the Apps Script editor — it only touches reservations confirmed to actually be missing an invite, so it\'s safe to run any time.');
 }
 
 // Looks for a pickup/return invite by title, checking LIBRARY_CALENDAR_ID
@@ -1131,9 +1151,11 @@ function sendPendingInvites() {
     try {
       sendCalendarInvites(r, confirmedItems, libraryKey);
       Logger.log('sendPendingInvites: sent invites for ' + r[2] + ' (' + libraryKey + ' ' + pickupFmt + ')');
+      props.deleteProperty('inviteFailAlert_' + sentKey);
     } catch(e) {
       props.deleteProperty(sentKey);
       Logger.log('sendPendingInvites error for ' + email + ': ' + e.message);
+      alertInviteFailureOnce(sentKey, email, libraryKey, pickupFmt, returnFmt, e.message);
     }
   });
 }
@@ -1190,7 +1212,7 @@ function auditCalendarInvites() {
     GmailApp.sendEmail(me, 'Lending Library: ' + missing.length + ' reservation(s) missing calendar invites',
       'The following confirmed reservations appear to be missing calendar invites:\n\n' +
       missing.join('\n') + '\n\n' +
-      'The sendPendingInvites trigger will retry automatically within 5 minutes. If invites are still missing after 10 minutes, run clearScriptProperties() then run sendPendingInvites() manually.');
+      'The sendPendingInvites trigger will retry automatically within 5 minutes. If invites are still missing after 10 minutes, run recoverMissingInvites() from the Apps Script editor — it only touches reservations confirmed to actually be missing an invite, so it\'s safe to run any time (unlike clearScriptProperties(), which would also reset today\'s reminder/receipt dedup and risk duplicate emails).');
   } else {
     GmailApp.sendEmail(me, 'Lending Library: calendar audit complete — all clear',
       'All confirmed and lent-out reservations have calendar invites. No action needed.');
@@ -1395,7 +1417,7 @@ function nightlyAudit() {
     if (body) body += '\n';
     body += '=== MISSING CALENDAR INVITES ===\n\n';
     body += missing.join('\n') + '\n\n';
-    body += 'The sendPendingInvites trigger retries every 5 min. If still missing after 10 min, run clearScriptProperties() then sendPendingInvites() manually.';
+    body += 'The sendPendingInvites trigger retries every 5 min. If still missing after 10 min, run recoverMissingInvites() from the Apps Script editor — safe to run any time, unlike clearScriptProperties().';
   }
   GmailApp.sendEmail(me, 'Lending Library: nightly audit — ' + parts.join(', '), body);
   Logger.log(body);
@@ -1872,6 +1894,66 @@ function resetSentKeysForEmail(email) {
     }
   });
   Logger.log(deleted.length ? 'Deleted sentKeys: ' + deleted.join(', ') : 'No sentKeys found for ' + email);
+}
+
+// Safely retries reservations that are verified to be actually missing a
+// calendar invite — re-checks both calendars via findInviteEvents() before
+// touching anything, so a reservation whose invite already went out is
+// never touched (clearing its dedup key for one of those would create a
+// duplicate invite, and a duplicate borrower-facing email). For each row
+// confirmed missing, clears that row's own 'sent_' dedup key if it's
+// stuck set — maybeSendCombinedConfirmation()/sendPendingInvites() mark
+// that key *before* attempting the send (needed to prevent the two of
+// them racing and double-sending), so an interrupted or persistently-
+// failing send attempt leaves the key stuck "sent" forever with no
+// invite actually created — then re-runs sendPendingInvites() to retry
+// them. Safe to run any time; unlike clearScriptProperties() (which wipes
+// every dedup key, including today's reminder/receipt sends and would
+// risk duplicate emails for those), this only ever touches reservations
+// it has independently confirmed are missing an invite right now.
+function recoverMissingInvites() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
+  var rows  = sheet.getDataRange().getValues().slice(1);
+  var tz    = Session.getScriptTimeZone();
+  var props = PropertiesService.getScriptProperties();
+  var checked = {};
+  var clearedKeys = [];
+  rows.forEach(function(r) {
+    var status = String(r[15]).trim();
+    if (status !== 'Confirmed' && status !== 'Lent Out' && status !== 'Added to existing request') return;
+    var email      = String(r[3]).trim();
+    var libraryKey = String(r[0]).trim();
+    var pickupDate = r[10] instanceof Date ? r[10] : new Date(r[10]);
+    var returnDate = r[12] instanceof Date ? r[12] : new Date(r[12]);
+    if (!email || isNaN(pickupDate.getTime()) || isNaN(returnDate.getTime())) return;
+    var pickupFmt = Utilities.formatDate(pickupDate, tz, 'yyyy-MM-dd');
+    var returnFmt = Utilities.formatDate(returnDate, tz, 'yyyy-MM-dd');
+    var groupKey = email + '_' + libraryKey + '_' + pickupFmt + '_' + returnFmt;
+    if (!(groupKey in checked)) {
+      var name      = String(r[2]).trim();
+      var firstName = name.split(' ')[0];
+      var pDayStart = new Date(pickupDate); pDayStart.setHours(0,0,0,0);
+      var pDayEnd   = new Date(pickupDate); pDayEnd.setHours(23,59,59,999);
+      var rDayStart = new Date(returnDate); rDayStart.setHours(0,0,0,0);
+      var rDayEnd   = new Date(returnDate); rDayEnd.setHours(23,59,59,999);
+      var lib2 = getLibrary(libraryKey);
+      var libNameClean = lib2.name.replace(/'/g, '');
+      var pickupEvents = findInviteEvents(firstName, libNameClean, pDayStart, pDayEnd, 'Pickup');
+      var returnEvents = findInviteEvents(firstName, libNameClean, rDayStart, rDayEnd, 'Return');
+      checked[groupKey] = !pickupEvents.length || !returnEvents.length; // true = actually missing
+    }
+    if (!checked[groupKey]) return; // this reservation's invite already exists — leave it alone
+    var tsFmt = r[1] instanceof Date ? Utilities.formatDate(r[1], tz, 'yyyy-MM-dd HH:mm:ss') : String(r[1]);
+    var sentKey = 'sent_' + libraryKey + '_' + email.replace(/[^a-z0-9]/gi, '_') + '_' + pickupFmt + '_' + returnFmt + '_' + tsFmt.replace(/[^0-9]/g, '');
+    if (props.getProperty(sentKey)) {
+      props.deleteProperty(sentKey);
+      props.deleteProperty('inviteFailAlert_' + sentKey);
+      clearedKeys.push(sentKey);
+    }
+  });
+  Logger.log(clearedKeys.length ? 'Cleared stuck invite keys: ' + clearedKeys.join(', ') : 'No stuck invite keys found — any still-missing invites below never had a dedup key blocking them at all, so sendPendingInvites() should pick them up on its own.');
+  sendPendingInvites();
+  Logger.log('recoverMissingInvites: ran sendPendingInvites() to retry.');
 }
 
 function countReservations() {

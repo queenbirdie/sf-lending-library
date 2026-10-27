@@ -14,7 +14,7 @@ version → Deploy.**
 ```javascript
 // ==========================================
 // SF LENDING LIBRARY — Google Apps Script
-// v2.0 Unified — Last updated: 2026-10-27 9:37 AM PDT
+// v2.0 Unified — Last updated: 2026-10-27 10:07 AM PDT
 // ==========================================
 
 // ── Tabs ─────────────────────────────────
@@ -970,14 +970,23 @@ function maybeSendCombinedConfirmation(row) {
   // Wait until every sibling row has been actioned (anything other than Pending)
   var allActioned = siblingRows.every(function(r) { return String(r[15]).trim() !== 'Pending'; });
   if (!allActioned) return;
-  // Only send for items that were confirmed
+  // Only send for items that are still active — not just 'Confirmed': a
+  // reservation already marked 'Lent Out' (picked up) or 'Added to
+  // existing request' still needs an invite if one's missing (e.g. a
+  // revise that regenerated the invite under new dates but failed
+  // partway through, or a retry landing after the status moved on from
+  // 'Confirmed'). Excluding them here used to mean any such reservation
+  // could never get a missing invite retried again, ever, once its
+  // status progressed — found 2026-10-27 via a reservation stuck missing
+  // its return invite with no stuck dedup key and no error logged, just
+  // silently excluded by this filter being too narrow.
   var confirmedItems = siblingRows
-    .filter(function(r) { return String(r[15]).trim() === 'Confirmed'; })
+    .filter(function(r) { return ['Confirmed', 'Lent Out', 'Added to existing request'].indexOf(String(r[15]).trim()) !== -1; })
     .map(function(r) {
       var qty = (r[8] && !isNaN(parseInt(r[8]))) ? parseInt(r[8]) : 1;
       return { name: String(r[7]).trim(), id: String(r[5] || '').trim(), brand: String(r[6] || '').trim(), size: String(r[9] || '').trim(), qty: qty };
     });
-  if (!confirmedItems.length) return; // everything was cancelled, nothing to send
+  if (!confirmedItems.length) return; // everything was cancelled/declined, nothing to send
   // Per-submission dedup (includes timestamp to handle same-person same-dates repeat bookings)
   var sentKey = 'sent_' + libraryKey + '_' + email.replace(/[^a-z0-9]/gi, '_') + '_' + pickupFmt + '_' + returnFmt + '_' + tsFmt.replace(/[^0-9]/g, '');
   var lock = LockService.getScriptLock();
@@ -1082,26 +1091,43 @@ function sendCalendarInvites(data, items, libraryKey) {
     '☐ WhatsApp Lauren once you\'ve returned (if not in person)\n' +
     '☐ Loved it? Consider a donation to keep the library going — Venmo @lrturon\n' +
     '☐ Questions? sflendinglibrary.org';
-  Calendar.Events.insert({
-    summary: firstName + ' <> ' + lib.name + ' Pickup',
-    location: lib.address,
-    description: pickupDesc,
-    start: { dateTime: pickupStart.toISOString(), timeZone: tz },
-    end:   { dateTime: pickupEnd.toISOString(),   timeZone: tz },
-    attendees: [{ email: email }],
-    transparency: 'transparent',
-    colorId: '3'
-  }, LIBRARY_CALENDAR_ID, { sendUpdates: 'all' });
-  Calendar.Events.insert({
-    summary: firstName + ' <> ' + lib.name + ' Return',
-    location: lib.address,
-    description: returnDesc,
-    start: { dateTime: returnStart.toISOString(), timeZone: tz },
-    end:   { dateTime: returnEnd.toISOString(),   timeZone: tz },
-    attendees: [{ email: email }],
-    transparency: 'transparent',
-    colorId: '3'
-  }, LIBRARY_CALENDAR_ID, { sendUpdates: 'all' });
+  // Check for an existing invite before creating each one — a retry (from
+  // sendPendingInvites(), recoverMissingInvites(), or a revise) can land
+  // here after a previous call already created one of the two events but
+  // failed partway through on the other; without this check, the retry
+  // would unconditionally recreate BOTH, duplicating the one that already
+  // succeeded (and re-pinging the borrower with a "new" invite email for
+  // it). Found 2026-10-27 after recoverMissingInvites() duplicated several
+  // pickup invites whose return invite alone was missing.
+  var libNameClean = lib.name.replace(/'/g, '');
+  var pStart = new Date(pickupStart); pStart.setHours(0,0,0,0);
+  var pEnd   = new Date(pickupStart); pEnd.setHours(23,59,59,999);
+  var rStart = new Date(returnStart); rStart.setHours(0,0,0,0);
+  var rEnd   = new Date(returnStart); rEnd.setHours(23,59,59,999);
+  if (!findInviteEvents(firstName, libNameClean, pStart, pEnd, 'Pickup').length) {
+    Calendar.Events.insert({
+      summary: firstName + ' <> ' + lib.name + ' Pickup',
+      location: lib.address,
+      description: pickupDesc,
+      start: { dateTime: pickupStart.toISOString(), timeZone: tz },
+      end:   { dateTime: pickupEnd.toISOString(),   timeZone: tz },
+      attendees: [{ email: email }],
+      transparency: 'transparent',
+      colorId: '3'
+    }, LIBRARY_CALENDAR_ID, { sendUpdates: 'all' });
+  }
+  if (!findInviteEvents(firstName, libNameClean, rStart, rEnd, 'Return').length) {
+    Calendar.Events.insert({
+      summary: firstName + ' <> ' + lib.name + ' Return',
+      location: lib.address,
+      description: returnDesc,
+      start: { dateTime: returnStart.toISOString(), timeZone: tz },
+      end:   { dateTime: returnEnd.toISOString(),   timeZone: tz },
+      attendees: [{ email: email }],
+      transparency: 'transparent',
+      colorId: '3'
+    }, LIBRARY_CALENDAR_ID, { sendUpdates: 'all' });
+  }
 }
 
 function sendPendingInvites() {
@@ -1135,8 +1161,11 @@ function sendPendingInvites() {
     });
     // Wait until all siblings are actioned
     if (!siblingRows.every(function(sr) { return String(sr[15]).trim() !== 'Pending'; })) return;
+    // Same broadened set as maybeSendCombinedConfirmation() — a sibling
+    // already 'Lent Out' or 'Added to existing request' still needs to be
+    // in the invite, not just literally 'Confirmed'.
     var confirmedItems = siblingRows
-      .filter(function(sr) { return String(sr[15]).trim() === 'Confirmed'; })
+      .filter(function(sr) { return ['Confirmed', 'Lent Out', 'Added to existing request'].indexOf(String(sr[15]).trim()) !== -1; })
       .map(function(sr) {
         var qty = (sr[8] && !isNaN(parseInt(sr[8]))) ? parseInt(sr[8]) : 1;
         return { name: String(sr[7]).trim(), id: String(sr[5] || '').trim(), brand: String(sr[6] || '').trim(), size: String(sr[9] || '').trim(), qty: qty };

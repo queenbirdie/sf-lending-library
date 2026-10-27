@@ -678,6 +678,49 @@ interrupted in a way that skips the `catch` block entirely (a hard
 execution-governor kill mid-call). `recoverMissingInvites()` is the
 mitigation for when that happens again, not a guarantee it can't.
 
+**Follow-up from running `recoverMissingInvites()` for the first time
+(2026-10-27, same day):** it surfaced two more problems.
+
+**1. It duplicated invites for reservations missing only one of
+pickup/return.** `sendCalendarInvites()` always creates *both* events
+unconditionally — it never checked whether one of them already existed.
+5 of the original ~19 reservations (all `costumes`) were missing only
+their *return* invite (pickup had sent fine originally); recreating via
+`sendCalendarInvites()` duplicated those 5 pickup invites (and likely
+re-pinged each borrower with a "new" pickup invite email) while correctly
+filling in the missing return. Fixed by having `sendCalendarInvites()`
+check `findInviteEvents()` before each of its two `Calendar.Events.insert`
+calls and skip creating whichever one already exists. This makes every
+retry path (`sendPendingInvites()`, `recoverMissingInvites()`, a revise)
+safe to re-run without risk of duplicating a half that already succeeded
+— closes the gap left by the mark-before-send issue above, rather than
+just working around it. **Lauren still has to manually delete the 5
+duplicate pickup invites this created** (Julia Lee, Katy Butler, Julia
+Khusainova, Zdeni Hennessy, Emi Kelly, all `costumes`) — nothing here
+can reach back and remove events that already got created.
+
+**2. A reservation already `Lent Out` (or `Added to existing request`)
+could never get a missing invite retried, ever, no matter how many times
+`sendPendingInvites()` ran.** Both `maybeSendCombinedConfirmation()` and
+`sendPendingInvites()` filtered the items going into the invite down to
+`status === 'Confirmed'` literally — so once a reservation progressed
+past `Confirmed` (the normal flow: borrower picks it up, Lauren marks it
+`Lent Out`), it silently stopped qualifying for `confirmedItems` and both
+functions returned early with nothing sent, no error, no log line worth
+noticing. This is how Zdeni Hennessy's `costumes` return invite was still
+missing even after `recoverMissingInvites()` ran — she had no stuck dedup
+key at all (ruling out the mark-before-send bug above for her case
+specifically); she was just permanently excluded by this filter once her
+status moved past `Confirmed`. Fixed by broadening both filters from
+`=== 'Confirmed'` to the same three-status "active, needs an invite" set
+used everywhere else in the codebase (`['Confirmed', 'Lent Out', 'Added
+to existing request']` — e.g. `auditCalendarInvites()`'s/
+`recoverMissingInvites()`'s own status filter, `ACTIVE` in `Admin.gs`).
+The variable name `confirmedItems` is a bit of a misnomer now (it really
+means "items that should be in the invite, i.e. not cancelled/declined")
+— left as-is rather than renaming throughout, since the two filter sites
+are the only places it mattered.
+
 ## Deployment
 
 - `assets/`, `layouts/`, `content/`, `data/`, `hugo.toml` → live site,

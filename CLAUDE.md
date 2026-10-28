@@ -721,6 +721,18 @@ means "items that should be in the invite, i.e. not cancelled/declined")
 — left as-is rather than renaming throughout, since the two filter sites
 are the only places it mattered.
 
+**`scanForDuplicateInvites()`** (2026-10-28) — new, read-only Apps
+Script function to check for duplicates after the fact (e.g. the 5
+pickup invites `recoverMissingInvites()` duplicated before
+`sendCalendarInvites()` got its existence check, above). Checks
+`LIBRARY_CALENDAR_ID` directly (not `findInviteEvents()`'s personal-
+calendar fallback — a duplicate specifically means more than one event
+already landed on the dedicated calendar) for every active
+reservation's pickup/return search, and emails Lauren any day with more
+than one matching event, each with a direct link to open and delete.
+Deliberately doesn't delete anything itself — which copy to keep can
+differ (attendee response state, etc.), so that's left to her judgment.
+
 ## Deployment
 
 - `assets/`, `layouts/`, `content/`, `data/`, `hugo.toml` → live site,

@@ -14,7 +14,7 @@ version → Deploy.**
 ```javascript
 // ==========================================
 // SF LENDING LIBRARY — Google Apps Script
-// v2.0 Unified — Last updated: 2026-10-27 10:07 AM PDT
+// v2.0 Unified — Last updated: 2026-10-27 9:12 PM PDT
 // ==========================================
 
 // ── Tabs ─────────────────────────────────
@@ -1983,6 +1983,67 @@ function recoverMissingInvites() {
   Logger.log(clearedKeys.length ? 'Cleared stuck invite keys: ' + clearedKeys.join(', ') : 'No stuck invite keys found — any still-missing invites below never had a dedup key blocking them at all, so sendPendingInvites() should pick them up on its own.');
   sendPendingInvites();
   Logger.log('recoverMissingInvites: ran sendPendingInvites() to retry.');
+}
+
+// One-off scan for duplicate pickup/return invites — written 2026-10-28
+// after recoverMissingInvites() was found to have duplicated several
+// pickup invites before sendCalendarInvites() got its existence check
+// (see CLAUDE.md "Calendar invites can go permanently missing"). Checks
+// LIBRARY_CALENDAR_ID directly (not findInviteEvents()'s personal-
+// calendar fallback — a duplicate specifically means more than one
+// event already landed on the dedicated calendar) for every active
+// reservation's pickup/return search, and reports any day with more
+// than one matching event. Read-only — doesn't delete anything, since
+// picking which copy to keep (they can have different attendee-response
+// state) is better left to Lauren; the email includes a direct link to
+// each duplicate event so she can open and delete the extra one herself.
+function scanForDuplicateInvites() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_TAB);
+  var rows  = sheet.getDataRange().getValues().slice(1);
+  var tz    = Session.getScriptTimeZone();
+  var cal   = CalendarApp.getCalendarById(LIBRARY_CALENDAR_ID);
+  var checked = {};
+  var duplicates = [];
+  rows.forEach(function(r) {
+    var status = String(r[15]).trim();
+    if (status !== 'Confirmed' && status !== 'Lent Out' && status !== 'Added to existing request') return;
+    var email      = String(r[3]).trim();
+    var libraryKey = String(r[0]).trim();
+    var pickupDate = r[10] instanceof Date ? r[10] : new Date(r[10]);
+    var returnDate = r[12] instanceof Date ? r[12] : new Date(r[12]);
+    if (!email || isNaN(pickupDate.getTime()) || isNaN(returnDate.getTime())) return;
+    var pickupFmt = Utilities.formatDate(pickupDate, tz, 'yyyy-MM-dd');
+    var returnFmt = Utilities.formatDate(returnDate, tz, 'yyyy-MM-dd');
+    var groupKey = email + '_' + libraryKey + '_' + pickupFmt + '_' + returnFmt;
+    if (checked[groupKey]) return;
+    checked[groupKey] = true;
+    var name      = String(r[2]).trim();
+    var firstName = name.split(' ')[0];
+    var lib2 = getLibrary(libraryKey);
+    var libNameClean = lib2.name.replace(/'/g, '');
+    [['Pickup', pickupDate], ['Return', returnDate]].forEach(function(pair) {
+      var kind = pair[0], date = pair[1];
+      var dayStart = new Date(date); dayStart.setHours(0, 0, 0, 0);
+      var dayEnd   = new Date(date); dayEnd.setHours(23, 59, 59, 999);
+      var search = firstName + ' <> ' + libNameClean + ' ' + kind;
+      var events = cal.getEvents(dayStart, dayEnd, { search: search });
+      if (events.length > 1) {
+        duplicates.push(name + ' <' + email + '> — ' + libraryKey + ' — ' + events.length + ' ' + kind + ' invites on ' +
+          Utilities.formatDate(date, tz, 'MMM d') + ':\n' +
+          events.map(function(e) { return '    ' + e.getHtmlLink(); }).join('\n'));
+      }
+    });
+  });
+  var me = Session.getEffectiveUser().getEmail();
+  if (duplicates.length) {
+    GmailApp.sendEmail(me, 'Lending Library: ' + duplicates.length + ' duplicate calendar invite(s) found',
+      'The following reservations have more than one pickup/return invite on the same day:\n\n' + duplicates.join('\n\n') +
+      '\n\nOpen each link and delete the extra copy — this scan only reports, it doesn\'t delete anything automatically.');
+  } else {
+    GmailApp.sendEmail(me, 'Lending Library: duplicate invite scan complete — all clear',
+      'No duplicate pickup/return invites found for any active reservation.');
+  }
+  Logger.log(duplicates.length ? duplicates.join('\n\n') : 'No duplicates found.');
 }
 
 function countReservations() {

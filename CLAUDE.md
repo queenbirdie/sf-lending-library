@@ -733,6 +733,54 @@ than one matching event, each with a direct link to open and delete.
 Deliberately doesn't delete anything itself — which copy to keep can
 differ (attendee response state, etc.), so that's left to her judgment.
 
+## All project triggers vanished except `nightlyAudit` — reminder emails silently stopped
+
+(2026-10-30, reported by Lauren: reminder emails appeared to have
+stopped going out.) The Apps Script project's Triggers page showed
+exactly **one** trigger — `nightlyAudit` — where there should have been
+ten: `onSheetEdit` (the installable on-edit trigger that fires
+confirmations and calendar invites), `sendPendingReceipts` and
+`sendPendingInvites` (every 5 min), `nightlyAudit` (8am), `dailyScheduleEmail`
+(7pm), `sendPickupReminders` ×2 and `sendReturnReminders` ×2 (8am + 4pm),
+and `setupTriggers` itself (3am daily). `setupTriggers()` (`Code.js`) is
+meant to be self-healing — it wipes every trigger and recreates this
+exact set from scratch, including rescheduling itself for the next
+night — but something broke that chain entirely at some unknown point,
+and nothing here could say when or why: Apps Script doesn't keep a
+"trigger deleted on" log accessible to the project itself, and this repo
+has no visibility into the live project's Executions history or Google
+account activity. Pointed Lauren at the Executions page (to bracket the
+last successful `sendPickupReminders`/`sendReturnReminders` run) and at
+her Gmail for any Google notification about a disabled trigger or
+revoked authorization — either would date the incident, neither is
+something a session here can check. Fixed by running `setupTriggers()`
+once by hand, which restored all 10.
+
+The one structural clue: only `nightlyAudit` survived, not the triggers
+created *before* it in `setupTriggers()`'s own creation order
+(`onSheetEdit`, `sendPendingReceipts`, `sendPendingInvites`). That rules
+out "`setupTriggers()` ran and failed partway through" — a partial
+failure would have left the *earlier* ones standing, not skipped straight
+to a later one. More consistent with every trigger being wiped at once
+(an authorization/reconnection event is the usual cause of that in Apps
+Script) and `nightlyAudit` alone getting manually re-added afterward,
+without `setupTriggers()` ever being re-run to restore the rest.
+
+**`nightlyAudit()` now checks trigger health as part of its existing
+daily run** — a new first section (`EXPECTED_TRIGGERS`, checked via
+`ScriptApp.getProjectTriggers()`) comparing actual trigger counts per
+handler function against the expected set above, folded into the same
+combined audit email ("=== MISSING TRIGGERS ===", pointing at
+`setupTriggers()` as the fix) rather than a separate email. This is a
+real but partial mitigation, not a guarantee: it would have caught
+*this* incident (9 of 10 missing, `nightlyAudit` itself still running)
+within a day instead of relying on Lauren noticing the reminders had
+stopped — but it can't catch a *total* wipe that takes `nightlyAudit`
+down with everything else, since nothing would be left running to report
+it. No way around that from inside the script itself; the only real
+defense against a total wipe is Lauren occasionally glancing at the
+Triggers page herself.
+
 ## Deployment
 
 - `assets/`, `layouts/`, `content/`, `data/`, `hugo.toml` → live site,

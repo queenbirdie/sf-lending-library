@@ -14,7 +14,7 @@ version → Deploy.**
 ```javascript
 // ==========================================
 // SF LENDING LIBRARY — Google Apps Script
-// v2.0 Unified — Last updated: 2026-10-27 9:12 PM PDT
+// v2.0 Unified — Last updated: 2026-10-30 5:21 PM PDT
 // ==========================================
 
 // ── Tabs ─────────────────────────────────
@@ -1255,6 +1255,36 @@ function nightlyAudit() {
   var tz      = Session.getScriptTimeZone();
   var today   = new Date(); today.setHours(0, 0, 0, 0);
 
+  // --- Missing triggers ---
+  // Checked first, alongside duplicate item IDs, since a missing trigger
+  // can itself be *causing* some of the other symptoms below (no
+  // onSheetEdit trigger means confirmations never fire combined invites
+  // at all). setupTriggers() is meant to be self-healing — it reruns
+  // itself daily at 3am and recreates the full set from scratch — but on
+  // 2026-10-30 every trigger except nightlyAudit itself was found
+  // missing (reported by Lauren: reminder emails had stopped going out),
+  // with no record of when or why. This check can't protect against
+  // losing EVERY trigger at once — nightlyAudit wouldn't run to report
+  // it — but it would have caught that exact incident (9 of 10 gone,
+  // nightlyAudit still standing) within a day instead of only being
+  // noticed once someone flagged the missing reminders.
+  var EXPECTED_TRIGGERS = {
+    onSheetEdit: 1, sendPendingReceipts: 1, sendPendingInvites: 1,
+    nightlyAudit: 1, dailyScheduleEmail: 1, sendPickupReminders: 2,
+    sendReturnReminders: 2, setupTriggers: 1
+  };
+  var actualTriggerCounts = {};
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    var fn = t.getHandlerFunction();
+    actualTriggerCounts[fn] = (actualTriggerCounts[fn] || 0) + 1;
+  });
+  var missingTriggers = [];
+  Object.keys(EXPECTED_TRIGGERS).forEach(function(fn) {
+    var have = actualTriggerCounts[fn] || 0;
+    var need = EXPECTED_TRIGGERS[fn];
+    if (have < need) missingTriggers.push(fn + ' — found ' + have + ', expected ' + need);
+  });
+
   // --- Duplicate item IDs ---
   // findInventoryRow() matches by Item ID across the *entire* inventory
   // sheet with no per-library scoping (unlike its name-match fallback,
@@ -1393,19 +1423,26 @@ function nightlyAudit() {
 
   // --- Send combined email ---
   var me = Session.getEffectiveUser().getEmail();
-  if (!duplicateIds.length && !conflicts.length && !missing.length && !overduePickups.length && !overdueReturns.length) {
+  if (!missingTriggers.length && !duplicateIds.length && !conflicts.length && !missing.length && !overduePickups.length && !overdueReturns.length) {
     GmailApp.sendEmail(me, 'Lending Library: nightly audit — all clear',
-      'No duplicate item IDs, no double bookings, no missing calendar invites, no overdue status updates. Nothing to action.');
+      'No missing triggers, no duplicate item IDs, no double bookings, no missing calendar invites, no overdue status updates. Nothing to action.');
     return;
   }
   var parts = [];
+  if (missingTriggers.length) parts.push(missingTriggers.length + ' missing trigger(s)');
   if (duplicateIds.length)  parts.push(duplicateIds.length + ' duplicate item ID(s)');
   if (conflicts.length)      parts.push(conflicts.length + ' double-booking conflict(s)');
   if (missing.length)        parts.push(missing.length + ' missing calendar invite(s)');
   if (overduePickups.length) parts.push(overduePickups.length + ' overdue pickup(s)');
   if (overdueReturns.length) parts.push(overdueReturns.length + ' overdue return(s)');
   var body = '';
+  if (missingTriggers.length) {
+    body += '=== MISSING TRIGGERS ===\n\n';
+    body += missingTriggers.join('\n') + '\n\n';
+    body += 'Run setupTriggers() from the Apps Script editor to recreate the full set — it deletes everything and rebuilds all 10 from scratch, so it\'s safe to run even if only some are missing.\n';
+  }
   if (duplicateIds.length) {
+    if (body) body += '\n';
     body += '=== DUPLICATE ITEM IDS ===\n\n';
     duplicateIds.forEach(function(id) {
       body += id + ' — used by ' + dupIds[id].length + ' inventory rows:\n';
